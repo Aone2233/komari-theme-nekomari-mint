@@ -750,6 +750,47 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.network-tag.unclassified {
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px dashed var(--border);
+}
+.network-tag small {
+  font-size: 9px;
+}
+.network-evidence {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.network-evidence summary {
+  cursor: pointer;
+  line-height: 1.8;
+}
+.network-evidence small,
+.network-evidence p,
+.network-evidence dt {
+  color: var(--muted);
+}
+.network-evidence p {
+  line-height: 1.8;
+}
+.network-evidence dl {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 8px;
+  line-height: 1.8;
+}
+.network-evidence dd {
+  margin: 0;
+}
+[data-theme="dark"] .network-tag.unclassified {
+  color: var(--muted);
+  background: var(--bg);
+}
 .score-row {
   display: flex;
   gap: 18px;

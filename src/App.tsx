@@ -69,6 +69,8 @@ import {
   healthyConnections,
 } from "./enhancements";
 import CpuInsight from "./CpuInsight";
+import NetworkEvidence from "./NetworkEvidence";
+import { networkEvidence } from "./network";
 const History = lazy(() => import("./History"));
 const LatencyHistory = lazy(() => import("./LatencyHistory"));
 const CostPanel = lazy(() => import("./CostPanel"));
@@ -265,6 +267,7 @@ function NodeCard({
       ? Math.ceil((Date.parse(node.expired_at) - Date.now()) / 86_400_000)
       : null;
   const tags = parseTags(node.tags);
+  const network = networkEvidence(node, extension?.ip);
   const extensionNote = extensionMessage(
     extension,
     extError,
@@ -337,15 +340,19 @@ function NodeCard({
       </div>
       <div className="node-meta">
         <b>{regionName(node.region)}</b>
-        <span className="network-tag">
-          {(!extension?.ip?.stale ? extension?.ip?.network : undefined) ||
-            tags[0]?.text ||
-            node.virtualization ||
-            "服务器"}
+        <span
+          className={`network-tag ${network.unknown ? "unclassified" : ""}`}
+          title={network.title}
+        >
+          {network.label}
+          {network.manual && <small> · 手动</small>}
         </span>
         <span
           className="operator"
-          title={extension?.ip?.organization || node.group}
+          title={
+            (!extension?.ip?.stale ? extension?.ip?.organization : undefined) ||
+            node.group
+          }
         >
           {(!extension?.ip?.stale ? extension?.ip?.organization : undefined) ||
             node.group ||
@@ -657,6 +664,7 @@ function Detail({
         </div>
       </div>
       <CpuInsight name={node.cpu_name} />
+      <NetworkEvidence node={node} ip={extension?.ip} />
       {node.public_remark && (
         <p className="public-remark">{node.public_remark}</p>
       )}
@@ -1322,7 +1330,7 @@ export function App() {
         <footer>
           <span className="footer-brand">
             <Leaf size={15} />
-            Nekomari Mint <span>v0.5.1</span>
+            Nekomari Mint <span>v0.5.2</span>
           </span>
           <p>
             {String(

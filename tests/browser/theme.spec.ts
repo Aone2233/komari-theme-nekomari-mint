@@ -39,6 +39,9 @@ export async function fixture(
     loggedIn?: boolean;
     cpuName?: string;
     arch?: string;
+    nodeTags?: string;
+    network?: string;
+    networkStale?: boolean;
   } = {},
 ) {
   await page.route("**/api/me", (route) =>
@@ -71,7 +74,9 @@ export async function fixture(
           name,
           group: groups[i],
           region: ["JP", "HK", "US", "SG", "DE", "JP"][i],
-          tags: ["CN2GIA<Blue>;生产<Green>", "数据中心", "原生 IPv6"][i % 3],
+          tags:
+            options.nodeTags ??
+            ["CN2GIA<Blue>;生产<Green>", "数据中心", "原生 IPv6"][i % 3],
           price: 25 + i * 9,
           currency: "CNY",
           billing_cycle: 30,
@@ -184,7 +189,8 @@ export async function fixture(
             result = {
               version: 1,
               ip: {
-                network: "住宅 / 商宽",
+                network: options.network ?? "住宅 / 商宽",
+                stale: options.networkStale ?? false,
                 organization: "SoftBank",
                 country: "JP",
                 source: "fixture",
@@ -816,4 +822,94 @@ test("detail latency handles all-loss, empty and stale histories without implyin
   await expect(dialog.locator(".latency-line")).toHaveCount(1);
   await page.keyboard.press("Escape");
   await expect(page.locator("dialog")).toHaveCount(0);
+});
+
+test("legacy unknown types never hide explicit home/education labels or manufacture an ISP category", async ({
+  page,
+}) => {
+  await fixture(page, "nekomari", {
+    nodeTags: "1Gbps;家宽<Green>;9929",
+    network: "网络类型未知",
+  });
+  await page.goto("/");
+  const card = page.locator(".node-card").first();
+  await expect(card.locator(".operator")).toHaveText("SoftBank");
+  await expect(card.locator(".network-tag")).toHaveText("家宽 · 手动");
+  await expect(card.locator(".network-tag")).toHaveAttribute(
+    "title",
+    /管理员标签.*不代表第三方已验证/,
+  );
+  await card.getByRole("button", { name: "节点详情", exact: true }).click();
+  const evidence = page.getByLabel("网络类型依据");
+  await evidence.locator("summary").click();
+  await expect(evidence).toContainText("管理员类别标签家宽");
+  await expect(evidence).toContainText("自动类型摘要未能确认");
+  await expect(evidence).toContainText("fixture（不等于类型分类来源）");
+  await page.keyboard.press("Escape");
+  await fixture(page, "nekomari", {
+    nodeTags: "IPv6;9929;500Mbps",
+    network: "网络类型未知",
+  });
+  await page.reload();
+  await expect(card.locator(".operator")).toHaveText("SoftBank");
+  await expect(card.locator(".network-tag")).toHaveText("未分类");
+  await expect(card.locator(".network-tag")).toHaveClass(/unclassified/);
+  await card.getByRole("button", { name: "节点详情", exact: true }).click();
+  await page.getByLabel("网络类型依据").locator("summary").click();
+  await expect(page.getByLabel("网络类型依据")).toContainText(
+    "无法区分分类未命中与分类源不可用",
+  );
+  await expect(page.getByLabel("网络类型依据")).toContainText("IPv6 是地址族");
+  await page.setViewportSize({ width: 320, height: 1000 });
+  expect(
+    await page
+      .locator("dialog")
+      .evaluate((el) => el.scrollWidth <= el.clientWidth),
+  ).toBe(true);
+  await page.getByLabel("网络类型依据").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "test-results/network-evidence-mobile.png" });
+});
+
+test("manual education labels retain conflicting automatic data in details", async ({
+  page,
+}) => {
+  await fixture(page, "nekomari", { nodeTags: "教育网", network: "数据中心" });
+  await page.goto("/");
+  const card = page.locator(".node-card").first();
+  await expect(card.locator(".operator")).toHaveText("SoftBank");
+  await expect(card.locator(".network-tag")).toHaveText("教育网 · 手动");
+  await card.getByRole("button", { name: "节点详情", exact: true }).click();
+  const evidence = page.getByLabel("网络类型依据");
+  await evidence.locator("summary").click();
+  await expect(evidence).toContainText("管理员类别标签教育网");
+  await expect(evidence).toContainText("自动类型摘要数据中心");
+});
+
+test("stale and official network summaries never use routes or virtualization as network types", async ({
+  page,
+}) => {
+  await fixture(page, "nekomari", {
+    nodeTags: "IPv6;9929",
+    network: "数据中心",
+    networkStale: true,
+  });
+  await page.goto("/");
+  const card = page.locator(".node-card").first();
+  await expect(card.locator(".network-tag")).toHaveText("未分类");
+  await expect(card.locator(".operator")).not.toHaveAttribute(
+    "title",
+    /SoftBank/,
+  );
+  await card.getByRole("button", { name: "节点详情", exact: true }).click();
+  const evidence = page.getByLabel("网络类型依据");
+  await evidence.locator("summary").click();
+  await expect(evidence).toContainText("数据中心（已过期，不用于分类）");
+  await page.keyboard.press("Escape");
+  await fixture(page, "official", { nodeTags: "教育网" });
+  await page.reload();
+  await expect(card.locator(".network-tag")).toHaveText("教育网 · 手动");
+  await fixture(page, "official", { nodeTags: "9929;IPv6;KVM" });
+  await page.reload();
+  await expect(card.locator(".network-tag")).toHaveText("未分类");
+  await expect(card.locator(".node-tags")).toContainText("9929");
 });

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.2 - 2026-10-17
+
+- Fix legacy unknown network summaries hiding explicit administrator home/education category tags; mark manual categories distinctly.
+- Retain automatic classifications separately in detail evidence, including conflicts and stale summaries.
+- Stop treating arbitrary first tags, hypervisors, routes, address families or organization names as network categories.
+- Render unconfirmed categories neutrally and explain the legacy hosting/mobile-only classifier without equating hosting=false with residential.
+
 ## 0.5.1 - 2026-10-17
 
 - Honor minute-aligned legacy ping history rollups when a task is configured below one minute; keep failed probes and long gaps disconnected.

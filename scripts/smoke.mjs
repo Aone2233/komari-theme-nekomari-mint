@@ -91,6 +91,7 @@ try {
   if (!historyLabel || /，0 个/.test(historyLabel))
     throw Error("Real CPU history is empty");
   await page.getByLabel("处理器能力说明").waitFor();
+  await page.getByLabel("网络类型依据").waitFor();
   await page.getByRole("img", { name: /延迟折线图，/ }).waitFor();
   if (await page.locator("dialog .history, dialog .ping-row").count())
     throw Error(
