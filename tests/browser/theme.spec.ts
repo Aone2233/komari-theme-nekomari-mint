@@ -1269,13 +1269,16 @@ test("custom latency ranges validate, query from now, crop exactly and display a
 }) => {
   await fixture(page);
   const now = Math.floor(Date.now() / 60000) * 60000;
+  await page.clock.install({ time: now + 1000 });
   const start = now - 30 * 3600000,
     end = now - 24 * 3600000;
   const requests: string[] = [];
   await page.route("**/api/rpc2", async (route) => {
     const req = route.request().postDataJSON();
     if (req.method !== "public:getPingRecords") return route.fallback();
-    requests.push(req.params.hours);
+    // Homepage cards independently load one-hour histories on staggered timers.
+    // Only count non-default queries when checking custom form validation.
+    if (req.params.hours !== "1") requests.push(req.params.hours);
     await route.fulfill({
       json: {
         id: req.id,
