@@ -31,7 +31,7 @@ export async function fixture(
           name,
           group: groups[i],
           region: ["JP", "HK", "US", "SG", "DE", "JP"][i],
-          tags: ["住宅 / 商宽", "数据中心", "原生 IPv6"][i % 3],
+          tags: ["CN2GIA<Blue>;生产<Green>", "数据中心", "原生 IPv6"][i % 3],
           price: 25 + i * 9,
           currency: "CNY",
           billing_cycle: 30,
@@ -66,6 +66,7 @@ export async function fixture(
           traffic_up: 6442450944,
           traffic_down: 10737418240,
           uptime: 935280,
+          connections: 42,
           tcp_retrans_percent: mode === "official" ? undefined : 1.1,
         },
       ]),
@@ -116,6 +117,23 @@ export async function fixture(
                   : j % 29 === 0
                     ? 310
                     : [92, 129, 69][j % 3] + (j % 7) * 2,
+            })),
+          };
+          break;
+        case "public:queryMetrics":
+          result = {
+            series: [
+              "cpu.usage",
+              "memory.used",
+              "net.in.rate",
+              "net.out.rate",
+            ].map((metric_key, i) => ({
+              metric_key,
+              interval_seconds: 60,
+              points: Array.from({ length: 20 }, (_, j) => ({
+                time: new Date(now - (20 - j) * 60000).toISOString(),
+                value: j === 8 ? null : (i + 1) * 20 + j,
+              })),
             })),
           };
           break;
@@ -203,7 +221,7 @@ test("desktop: real data states, search, grouping, details and dark mode", async
       .first()
       .locator(".service")
       .filter({ hasText: "Gemini" }),
-  ).toContainText("未检测");
+  ).toContainText("未接入");
   await page.getByRole("button", { name: "美洲节点", exact: true }).click();
   await expect(page.locator(".node-card")).toHaveCount(1);
   await page.getByRole("button", { name: /全部节点/ }).click();
@@ -232,7 +250,7 @@ test("official Komari: unsupported insights degrade without breaking metrics", a
   ).toContainText("4%");
   await expect(
     page.locator(".node-card").first().locator(".services"),
-  ).toContainText("未检测");
+  ).toContainText("待升级");
   await expect(page.locator(".error-banner")).toHaveCount(0);
 });
 test("private site never renders node information", async ({ page }) => {
@@ -260,6 +278,9 @@ for (const width of [320, 390, 768, 1440])
     ).toBe(true);
   });
 test("generate labeled preview screenshots", async ({ page }, testInfo) => {
+  await page.addInitScript(() =>
+    localStorage.setItem("mint-hide-costs", "false"),
+  );
   const output = (name: string) =>
     process.env.MINT_UPDATE_SCREENSHOTS === "1"
       ? name
@@ -307,4 +328,91 @@ test("session revocation clears node information and an open detail", async ({
   await expect(page.locator(".login-panel")).toBeVisible({ timeout: 12000 });
   await expect(page.locator(".node-card")).toHaveCount(0);
   await expect(page.locator("dialog")).toHaveCount(0);
+});
+
+test("SAO-inspired controls: cost privacy, list view, tags and lazy history", async ({
+  page,
+}) => {
+  await fixture(page);
+  await page.goto("/");
+  await expect(page.locator(".overview")).toContainText("••••");
+  await page.getByRole("button", { name: "显示费用", exact: true }).click();
+  await expect(page.locator(".overview")).toContainText("285.00");
+  await expect(page.locator(".node-tags").first()).toContainText("CN2GIA");
+  await expect(page.locator(".node-tags").first()).not.toContainText("<Blue>");
+  await page.getByRole("button", { name: "切换列表视图" }).click();
+  await expect(page.locator(".list-view")).toBeVisible();
+  await page
+    .getByRole("button", { name: "节点详情", exact: true })
+    .first()
+    .click();
+  await expect(page.getByLabel("CPU历史，19 个有效点")).toBeVisible();
+  await page.getByLabel("历史时间范围").selectOption("6");
+  await expect(page.getByLabel("CPU历史，19 个有效点")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await expect(page.locator(".list-view")).toBeVisible();
+  await expect(page.locator(".overview")).toContainText("285.00");
+  await page.setViewportSize({ width: 320, height: 1000 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("history falls back only for a missing method and ignores a cancelled range", async ({
+  page,
+}) => {
+  await fixture(page, "official");
+  const ranges: number[] = [];
+  await page.route("**/api/rpc2", async (route) => {
+    const req = route.request().postDataJSON();
+    if (req.method === "public:queryMetrics") {
+      await route.fulfill({
+        json: {
+          jsonrpc: "2.0",
+          id: req.id,
+          error: { code: -32601, message: "Method not found" },
+        },
+      });
+    } else if (req.method === "common:getRecords") {
+      ranges.push(req.params.hours);
+      if (req.params.hours === 6)
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      await route.fulfill({
+        json: {
+          jsonrpc: "2.0",
+          id: req.id,
+          result: {
+            records: {
+              [req.params.uuid]: Array.from(
+                { length: req.params.hours === 24 ? 3 : 2 },
+                (_, i) => ({
+                  time: new Date(Date.now() - (i + 1) * 60000).toISOString(),
+                  cpu: 12,
+                  ram: 1024,
+                  net_in: 5,
+                  net_out: 6,
+                }),
+              ),
+            },
+          },
+        },
+      });
+    } else await route.fallback();
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "节点详情", exact: true })
+    .first()
+    .click();
+  await expect(page.getByLabel("CPU历史，2 个有效点")).toBeVisible();
+  await page.getByLabel("历史时间范围").selectOption("6");
+  await expect.poll(() => ranges.includes(6)).toBe(true);
+  await page.getByLabel("历史时间范围").selectOption("24");
+  await expect(page.getByLabel("CPU历史，3 个有效点")).toBeVisible();
+  await page.waitForTimeout(500);
+  await expect(page.getByLabel("CPU历史，3 个有效点")).toBeVisible();
+  await expect(page.locator(".resource-history [role=alert]")).toHaveCount(0);
 });

@@ -183,7 +183,7 @@ export function unlockState(item: UnlockItem | undefined, stale = false) {
         item.status === "blocked"
           ? "地区受限"
           : item.status === "unknown"
-            ? "地区未知"
+            ? "地区判断"
             : "地区判断",
       tone: "region",
     };

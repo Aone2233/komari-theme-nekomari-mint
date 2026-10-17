@@ -36,6 +36,9 @@ export interface LiveStatus {
   traffic_up?: number | null;
   traffic_down?: number | null;
   tcp_retrans_percent?: number | null;
+  connections?: number | null;
+  swap?: number | null;
+  swap_total?: number | null;
   uptime?: number | null;
   load?: number | null;
   quality?: Record<string, string>;

@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useRef,
@@ -59,6 +61,14 @@ import type {
   PingTask,
   Site,
 } from "./types";
+
+import {
+  parseTags,
+  duration,
+  extensionMessage,
+  healthyConnections,
+} from "./enhancements";
+const History = lazy(() => import("./History"));
 
 const services = [
   ["chatgpt", "ChatGPT"],
@@ -163,6 +173,7 @@ function NodeCard({
   tasks,
   settings,
   index,
+  hideCosts,
   onOpen,
 }: {
   node: NodeInfo;
@@ -170,6 +181,7 @@ function NodeCard({
   tasks: PingTask[];
   settings?: Site["theme_settings"];
   index: number;
+  hideCosts: boolean;
   onOpen: (
     node: NodeInfo,
     records: PingRecord[],
@@ -180,6 +192,7 @@ function NodeCard({
   const [extension, setExtension] = useState<Extension | null>(null);
   const [historyError, setHistoryError] = useState(false);
   const [extError, setExtError] = useState(false);
+  const [extLoading, setExtLoading] = useState(true);
   const cardRef = useRef<HTMLElement>(null);
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -195,33 +208,41 @@ function NodeCard({
   useEffect(() => {
     if (!visible) return;
     if (settings?.showExtensions === false) setExtension(null);
+    else setExtLoading(true);
     let stopped = false,
       timer: ReturnType<typeof setTimeout>;
     async function refresh() {
       if (!document.hidden) {
-        try {
-          const data = await loadPings(node.uuid);
-          if (!stopped) {
-            setRecords(data);
-            setHistoryError(false);
-          }
-        } catch {
-          if (!stopped) setHistoryError(true);
-        }
-        if (settings?.showExtensions !== false) {
-          try {
-            const data = await loadExtension(node.uuid);
-            if (!stopped) {
-              setExtension(data);
-              setExtError(false);
+        await Promise.all([
+          (async () => {
+            try {
+              const data = await loadPings(node.uuid);
+              if (!stopped) {
+                setRecords(data);
+                setHistoryError(false);
+              }
+            } catch {
+              if (!stopped) setHistoryError(true);
             }
-          } catch {
-            if (!stopped) {
-              setExtError(true);
-              setExtension(null);
+          })(),
+          (async () => {
+            if (settings?.showExtensions === false) return;
+            try {
+              const data = await loadExtension(node.uuid);
+              if (!stopped) {
+                setExtension(data);
+                setExtError(false);
+              }
+            } catch {
+              if (!stopped) {
+                setExtError(true);
+                setExtension(null);
+              }
+            } finally {
+              if (!stopped) setExtLoading(false);
             }
-          }
-        }
+          })(),
+        ]);
       }
       if (!stopped) timer = setTimeout(refresh, 60_000);
     }
@@ -240,7 +261,13 @@ function NodeCard({
     node.expired_at && Date.parse(node.expired_at) > 0
       ? Math.ceil((Date.parse(node.expired_at) - Date.now()) / 86_400_000)
       : null;
-  const tags = (node.tags || "").split(";").filter(Boolean);
+  const tags = parseTags(node.tags);
+  const extensionNote = extensionMessage(
+    extension,
+    extError,
+    settings?.showExtensions !== false,
+    extLoading,
+  );
   const recentPing = series.some(
     (s) =>
       s.records.at(-1) &&
@@ -279,7 +306,7 @@ function NodeCard({
           onClick={() => onOpen(node, records, extension)}
         >
           <i className={`status-dot ${isOnline ? "up" : ""}`} />
-          <h2>{node.name}</h2>
+          <h2 title={node.name}>{node.name}</h2>
         </button>
         <div className="card-rating">
           <button
@@ -309,7 +336,7 @@ function NodeCard({
         <b>{regionName(node.region)}</b>
         <span className="network-tag">
           {(!extension?.ip?.stale ? extension?.ip?.network : undefined) ||
-            tags[0] ||
+            tags[0]?.text ||
             node.virtualization ||
             "服务器"}
         </span>
@@ -322,6 +349,15 @@ function NodeCard({
             "独立节点"}
         </span>
       </div>
+      {!!tags.length && (
+        <div className="node-tags">
+          {tags.map((tag, i) => (
+            <span key={i} style={{ "--tag-color": tag.color } as CSSProperties}>
+              {tag.text}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="score-row">
         <span title="延迟分 = max(0, 100 − 各线路中位延迟 / 5)">
           线路 <b>{score.latency ?? "—"}</b>
@@ -416,7 +452,15 @@ function NodeCard({
                           : route.reached
                             ? "未识别"
                             : "未到达"
-                        : "未检测")}
+                        : settings?.showExtensions === false
+                          ? "已关闭"
+                          : extLoading
+                            ? "读取中"
+                            : extError
+                              ? "读取失败"
+                              : !extension
+                                ? "待升级"
+                                : "未配置")}
                 </span>
               );
             },
@@ -434,13 +478,35 @@ function NodeCard({
           </b>
         </span>
       </div>
+      <p
+        className={`extension-note ${extError ? "warning" : ""}`}
+        title={extensionNote}
+      >
+        {extensionNote}
+      </p>
       <div className="services">
         {services.map(([id, name]) => {
           const item = unlock?.results.find(
             (r) =>
               r.id === id || (id === "youtube" && r.id.startsWith("youtube")),
           );
-          const state = unlockState(item, unlock?.stale || extError);
+          const state = item
+            ? unlockState(item, unlock?.stale || extError)
+            : {
+                label:
+                  settings?.showExtensions === false
+                    ? "已关闭"
+                    : extLoading
+                      ? "读取中"
+                      : extError
+                        ? "读取失败"
+                        : !extension
+                          ? "待升级"
+                          : id === "gemini"
+                            ? "未接入"
+                            : "未上报",
+                tone: "muted",
+              };
           return (
             <span
               className={`service ${state.tone}`}
@@ -457,6 +523,15 @@ function NodeCard({
         <Metric name="CPU" value={cpu} />
         <Metric name="内存" value={ram} />
         <Metric name="磁盘" value={disk} />
+      </div>
+      <div className="node-runtime">
+        <span>运行 {duration(isOnline ? live?.uptime : null)}</span>
+        <span>连接 {isOnline ? (healthyConnections(live) ?? "—") : "—"}</span>
+        {!hideCosts && node.price != null && node.price > 0 && (
+          <span>
+            {node.currency} {node.price} / {node.billing_cycle}天
+          </span>
+        )}
       </div>
       <div className="card-bottom">
         <div className="network-rates">
@@ -579,6 +654,17 @@ function Detail({
           </small>
         </div>
       </div>
+      {node.public_remark && (
+        <p className="public-remark">{node.public_remark}</p>
+      )}
+      <div className="node-runtime">
+        <span>运行时间 {duration(live?.uptime)}</span>
+        <span>连接数 {healthyConnections(live) ?? "—"}</span>
+        <span>负载 {live?.load ?? "—"}</span>
+      </div>
+      <Suspense fallback={<p>正在载入历史图表…</p>}>
+        <History uuid={node.uuid} />
+      </Suspense>
       <h3>
         线路观测 <small>近 1 小时</small>
       </h3>
@@ -601,20 +687,49 @@ function Detail({
           </p>
         )}
       </div>
+      <h3>回程证据</h3>
+      <p className="empty-note">
+        {extension?.routes
+          ? `探测于 ${new Date(extension.routes.probed_at).toLocaleString("zh-CN")} · ${extension.routes.stale ? "已过期" : "ASN 观察，不保证全程或 CN2 GIA"}`
+          : extension
+            ? "Agent 未配置回程目标或未上报；延迟任务不等于回程探测。"
+            : "服务端未提供 Mint 摘要接口，请升级 Nekomari。"}
+      </p>
+      {extension?.routes?.results.map((route, i) => (
+        <p className="route-evidence" key={i}>
+          {carriers[route.carrier as keyof typeof carriers] || route.carrier} ·{" "}
+          {route.target} · {route.label || "未识别 ASN"} ·{" "}
+          {route.reached ? "已到达" : "未到达"} · {route.hops} 跳
+          {route.error ? ` · ${route.error}` : ""}
+        </p>
+      ))}
       <h3>检测依据</h3>
+      <p className="empty-note">
+        {extension?.unlock
+          ? `探测于 ${new Date(extension.unlock.probed_at).toLocaleString("zh-CN")} · ${extension.unlock.stale ? "已过期" : "快照有效"}`
+          : "尚无可读取的检测快照"}
+      </p>
       <div className="evidence">
         {services.map(([id, name]) => {
           const item = extension?.unlock?.results.find(
             (r) => r.id === id || (id === "youtube" && r.id.startsWith(id)),
           );
-          const state = unlockState(item, extension?.unlock?.stale);
+          const state =
+            id === "gemini" && !item
+              ? { label: "未接入", tone: "muted" }
+              : unlockState(item, extension?.unlock?.stale);
           return (
             <div key={id}>
               <b>{name}</b>
               <span className={`evidence-label ${state.tone}`}>
                 {state.label}
               </span>
-              <p>{item?.detail || "尚未收到此服务的检测结果。"}</p>
+              <p>
+                {item?.detail ||
+                  (id === "gemini"
+                    ? "Agent 尚未实现此服务的探测。"
+                    : "尚未收到此服务的检测结果。")}
+              </p>
             </div>
           );
         })}
@@ -737,6 +852,16 @@ export function App() {
       records: PingRecord[];
       ext: Extension | null;
     } | null>(null);
+  const [view, setView] = useState(
+    () => localStorage.getItem("mint-view") || "cards",
+  );
+  const [hideCosts, setHideCosts] = useState(
+    () => localStorage.getItem("mint-hide-costs") !== "false",
+  );
+  useEffect(() => {
+    localStorage.setItem("mint-view", view);
+    localStorage.setItem("mint-hide-costs", String(hideCosts));
+  }, [view, hideCosts]);
   const [updated, setUpdated] = useState<Date | null>(null),
     [help, setHelp] = useState(false);
   // A failed request may repeat the same error; the clock must still expire stale reports.
@@ -842,7 +967,17 @@ export function App() {
         : sort === "expiry"
           ? (Date.parse(a.expired_at || "") || Infinity) -
             (Date.parse(b.expired_at || "") || Infinity)
-          : (b.weight || 0) - (a.weight || 0),
+          : sort === "cpu"
+            ? (online(live[b.uuid]) ? (live[b.uuid]?.cpu ?? -1) : -1) -
+              (online(live[a.uuid]) ? (live[a.uuid]?.cpu ?? -1) : -1)
+            : sort === "speed"
+              ? (online(live[b.uuid])
+                  ? (live[b.uuid]?.net_in ?? 0) + (live[b.uuid]?.net_out ?? 0)
+                  : -1) -
+                (online(live[a.uuid])
+                  ? (live[a.uuid]?.net_in ?? 0) + (live[a.uuid]?.net_out ?? 0)
+                  : -1)
+              : (b.weight || 0) - (a.weight || 0),
     );
   const onlineCount = nodes.filter((n) => online(live[n.uuid])).length;
   const monthly = monthlyTotal(nodes, site.theme_settings);
@@ -869,6 +1004,13 @@ export function App() {
             </strong>
           </a>
           <nav>
+            <button
+              className="privacy-button"
+              onClick={() => setHideCosts(!hideCosts)}
+              aria-label={hideCosts ? "显示费用" : "隐藏费用"}
+            >
+              {hideCosts ? "显示费用" : "隐藏费用"}
+            </button>
             <a className="active" href="/">
               <Activity size={15} />
               总览
@@ -992,7 +1134,11 @@ export function App() {
                 </div>
                 <div className="stat-value">
                   <sup>¥</sup>
-                  {monthly.included ? monthly.total.toFixed(2) : "—"}
+                  {hideCosts
+                    ? "••••"
+                    : monthly.included
+                      ? monthly.total.toFixed(2)
+                      : "—"}
                   <span>/ 月</span>
                 </div>
                 <small>
@@ -1050,6 +1196,15 @@ export function App() {
                   ))}
                 </div>
                 <div className="toolbar-right">
+                  <button
+                    className="view-toggle"
+                    onClick={() => setView(view === "cards" ? "list" : "cards")}
+                    aria-label={
+                      view === "cards" ? "切换列表视图" : "切换卡片视图"
+                    }
+                  >
+                    {view === "cards" ? "列表" : "卡片"}
+                  </button>
                   <label className="search">
                     <Search size={16} />
                     <input
@@ -1069,6 +1224,8 @@ export function App() {
                       <option value="weight">默认排序</option>
                       <option value="name">名称排序</option>
                       <option value="expiry">到期时间</option>
+                      <option value="cpu">CPU 占用</option>
+                      <option value="speed">实时吞吐</option>
                     </select>
                     <ChevronDown size={12} />
                   </label>
@@ -1094,7 +1251,9 @@ export function App() {
                   <p>正在读取节点状态…</p>
                 </div>
               ) : shown.length ? (
-                <div className="node-grid">
+                <div
+                  className={`node-grid ${view === "list" ? "list-view" : ""}`}
+                >
                   {shown.map((n, i) => (
                     <NodeCard
                       key={n.uuid}
@@ -1103,6 +1262,7 @@ export function App() {
                       tasks={tasks}
                       settings={site.theme_settings}
                       index={i}
+                      hideCosts={hideCosts}
                       onOpen={(node, records, ext) =>
                         setDetail({ node, records, ext })
                       }
@@ -1147,7 +1307,7 @@ export function App() {
         <footer>
           <span className="footer-brand">
             <Leaf size={15} />
-            Nekomari Mint <span>v0.1.0</span>
+            Nekomari Mint <span>v0.2.0</span>
           </span>
           <p>
             {String(

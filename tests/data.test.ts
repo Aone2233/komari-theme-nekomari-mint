@@ -137,7 +137,7 @@ test("region-only and stale evidence never imply an actual unlock", () => {
   assert.equal(unlockState(item).label, "地区判断");
   assert.equal(unlockState(item, true).label, "已过期");
   assert.equal(unlockState({ ...item, status: "blocked" }).label, "地区受限");
-  assert.equal(unlockState({ ...item, status: "unknown" }).label, "地区未知");
+  assert.equal(unlockState({ ...item, status: "unknown" }).label, "地区判断");
   assert.equal(unlockState({ ...item, basis: "unreviewed" }).tone, "muted");
   assert.equal(unlockState(undefined).label, "未检测");
 });
@@ -173,4 +173,29 @@ test("missing exchange rates are excluded, not silently converted", () => {
 test("explicit carrier mapping overrides task-name recognition", () => {
   assert.equal(carrierFor(task), "telecom");
   assert.equal(carrierFor(task, { mobileTasks: [1] }), "mobile");
+});
+
+import { parseTags, duration, extensionMessage } from "../src/enhancements";
+import { chartSegments } from "../src/chart";
+test("tag markup is text with an allowlisted color, never HTML", () => {
+  assert.equal(parseTags("CN2GIA<Blue>;生产<Green>")[0].text, "CN2GIA");
+  assert.equal(parseTags("test<invalid>")[0].color, "#648370");
+  assert.equal(duration(90061), "1 天 1 小时");
+  assert.match(extensionMessage(null, false, true, false), /升级/);
+});
+test("charts preserve unknown and time gaps instead of connecting them", () => {
+  const time = (n: number) => new Date(n).toISOString();
+  const paths = chartSegments(
+    [
+      { time: time(1000), value: 2 },
+      { time: time(2000), value: null },
+      { time: time(3000), value: 4 },
+      { time: time(9000), value: 5 },
+    ],
+    0,
+    10000,
+    10,
+    2000,
+  );
+  assert.equal(paths.length, 3);
 });

@@ -17,6 +17,8 @@
 - 实际延迟任务的一小时历史、失败比例、协议 / 地址族区分；参考目标不混入主目标评分。
 - 后台管理式主题设置、私有站点登录（含两步验证码）、保留原有管理后台。
 - 可选 Nekomari 扩展：服务检测证据、回程 ASN 标签、Linux TCP 重传、本期流量、网络摘要。
+- 0.2.0：卡片 / 列表切换、彩色标签、运行时间 / 连接数、CPU / 吞吐排序和默认隐藏费用。
+- 详情按需加载 1 / 6 / 24 小时资源历史；区分面板待升级、Agent 未上报、未配置和检测过期。
 
 ## 安装
 
@@ -88,3 +90,6 @@ MIT, Aone2233. Built with React, Vite, Lucide and Manrope (their respective
 licenses remain applicable; see `docs/THIRD-PARTY.md`). Compatible with
 [Komari](https://github.com/komari-monitor/komari) and
 [Nekomari](https://github.com/Aone2233/Nekomari); not an official Komari project.
+Operational controls in 0.2.0 are inspired by
+[Komari-Theme-SAO](https://github.com/WAOR/Komari-Theme-SAO) (MIT);
+implemented independently for Mint without copying its source or artwork.

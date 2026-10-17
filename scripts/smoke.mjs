@@ -84,6 +84,12 @@ try {
     .first()
     .click();
   await page.waitForSelector("dialog[open]");
+  await page.getByRole("img", { name: /CPU历史，/ }).waitFor();
+  const historyLabel = await page
+    .getByRole("img", { name: /CPU历史，/ })
+    .getAttribute("aria-label");
+  if (!historyLabel || /，0 个/.test(historyLabel))
+    throw Error("Real CPU history is empty");
   await page.keyboard.press("Escape");
   let adminReachable = null;
   if (process.env.MINT_SMOKE_CREDENTIALS) {
@@ -114,6 +120,7 @@ try {
     origin,
     realMetrics: true,
     realPingHistory: true,
+    realResourceHistory: true,
     detail: true,
     adminReachable,
     panelRoutes,
