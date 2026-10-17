@@ -29,6 +29,12 @@ export async function rpc<T>(
     body: JSON.stringify({ jsonrpc: "2.0", method, params, id: ++nextID }),
   });
   const body = await response.json();
+  if (
+    response.status === 401 ||
+    (response.status === 403 &&
+      /private site|please login/i.test(body.message || ""))
+  )
+    throw new ApiError(body.message || "登录会话已失效，请重新登录", -32003);
   if (body.error) throw new ApiError(body.error.message, body.error.code);
   if (!response.ok || !("result" in body))
     throw new ApiError(`接口响应异常 (${response.status})`);

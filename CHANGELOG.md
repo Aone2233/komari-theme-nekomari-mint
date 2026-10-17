@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 - 2026-10-17
+
+- Handle production private-site HTTP 401/403 envelopes as login-required, not a
+  network failure or an empty public dashboard. Preserve the existing JSON-RPC guard.
+
 ## 0.2.0 - 2026-10-17
 
 - Add persistent card/list views, default-hidden cost display, colored tags, uptime,

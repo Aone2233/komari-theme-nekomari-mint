@@ -260,6 +260,24 @@ test("private site never renders node information", async ({ page }) => {
   await expect(page.locator(".node-card")).toHaveCount(0);
   await expect(page.getByLabel("密码", { exact: true })).toBeVisible();
 });
+test("production HTTP 401 envelope prompts login instead of an empty dashboard", async ({
+  page,
+}) => {
+  await fixture(page);
+  await page.route("**/api/rpc2", async (route) => {
+    await route.fulfill({
+      status: 401,
+      json: {
+        status: "error",
+        message: "Private site is enabled, please login first.",
+      },
+    });
+  });
+  await page.goto("/");
+  await expect(page.locator(".login-panel")).toBeVisible();
+  await expect(page.locator(".node-card")).toHaveCount(0);
+  await expect(page.locator(".error-banner")).toHaveCount(0);
+});
 test("empty and filtered states are explicit", async ({ page }) => {
   await fixture(page, "empty");
   await page.goto("/");
