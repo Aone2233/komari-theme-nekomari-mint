@@ -690,7 +690,7 @@ function Detail({
       <h3>回程证据</h3>
       <p className="empty-note">
         {extension?.routes
-          ? `探测于 ${new Date(extension.routes.probed_at).toLocaleString("zh-CN")} · ${extension.routes.stale ? "已过期" : "ASN 观察，不保证全程或 CN2 GIA"}`
+          ? `探测于 ${new Date(extension.routes.probed_at).toLocaleString("zh-CN")} · 每 24 小时检测 · ${extension.routes.stale ? "已过期" : "ASN 观察，不保证全程或 CN2 GIA"}`
           : extension
             ? "Agent 未配置回程目标或未上报；延迟任务不等于回程探测。"
             : "服务端未提供 Mint 摘要接口，请升级 Nekomari。"}
@@ -771,11 +771,12 @@ function Login({ site, onDone }: { site: Site; onDone: () => void }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   return (
-    <div className="login-panel">
+    <div className="login-panel km-restricted-login-dialog">
       <ShieldCheck size={36} />
       <h2>这是一个私有监控站点</h2>
       <p>登录后查看节点状态，凭据仅发送到当前站点。</p>
       <form
+        className="km-restricted-login-form"
         onSubmit={async (e) => {
           e.preventDefault();
           const data = new FormData(e.currentTarget);

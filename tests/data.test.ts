@@ -22,6 +22,28 @@ const now = Date.now(),
     type: "dual",
     clients: ["node"],
   };
+test("AI page reachability never claims working conversations", () => {
+  assert.equal(
+    unlockState({
+      id: "gemini",
+      name: "Gemini",
+      kind: "ai",
+      basis: "probe",
+      status: "partial",
+    }).label,
+    "页面可达",
+  );
+  assert.equal(
+    unlockState({
+      id: "netflix",
+      name: "Netflix",
+      kind: "media",
+      basis: "probe",
+      status: "partial",
+    }).label,
+    "部分可用",
+  );
+});
 const record = (value: number, extra = {}): PingRecord => ({
   task_id: 1,
   value,

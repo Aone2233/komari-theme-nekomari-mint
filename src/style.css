@@ -1175,6 +1175,33 @@ footer a {
 .login-panel [role="alert"] {
   color: var(--red);
 }
+.login-panel .km-passkey-login {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px;
+  border: 1px solid var(--green);
+  border-radius: 8px;
+  color: var(--green);
+  background: var(--paper);
+  font: inherit;
+  cursor: pointer;
+}
+.login-panel .km-passkey-login:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+.login-panel .km-passkey-login:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.login-panel .km-passkey-error {
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.6;
+}
 @keyframes spin {
   to {
     transform: rotate(360deg);

@@ -190,7 +190,11 @@ export function unlockState(item: UnlockItem | undefined, stale = false) {
   if (item.basis !== "probe") return { label: "依据未知", tone: "muted" };
   if (["unlocked", "ok"].includes(item.status))
     return { label: "可用", tone: "good" };
-  if (item.status === "partial") return { label: "部分可用", tone: "warn" };
+  if (item.status === "partial")
+    return {
+      label: item.kind === "ai" ? "页面可达" : "部分可用",
+      tone: "warn",
+    };
   if (item.status === "blocked") return { label: "受限", tone: "bad" };
   return { label: "未知", tone: "muted" };
 }

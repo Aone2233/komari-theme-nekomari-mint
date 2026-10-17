@@ -1,5 +1,36 @@
 import { test, expect, type Page } from "@playwright/test";
 
+test("private login retains the Passkey plugin mount contract", async ({
+  page,
+}) => {
+  await fixture(page, "private");
+  await page.goto("/");
+  const dialog = page.locator(".km-restricted-login-dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator(".km-restricted-login-form")).toBeVisible();
+  // The real plugin owns WebAuthn. Mint only provides its documented mount point.
+  await page.evaluate(() => {
+    const form = document.querySelector(
+      ".km-restricted-login-dialog .km-restricted-login-form",
+    )!;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "km-passkey-login";
+    button.textContent = "通过通行密钥登录";
+    form.appendChild(button);
+  });
+  const button = page.getByRole("button", { name: "通过通行密钥登录" });
+  await expect(button).toBeVisible();
+  await button.focus();
+  await expect(button).toBeFocused();
+  await page.setViewportSize({ width: 320, height: 900 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
 export async function fixture(
   page: Page,
   mode: "nekomari" | "official" | "private" | "empty" = "nekomari",

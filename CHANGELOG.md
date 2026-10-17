@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 - 2026-10-17
+
+- Support the installed Passkey plugin login mount points and Mint button styling.
+- Label AI partial evidence as page reachability, never working conversations.
+- Explain daily route observations and independent evidence freshness.
+- Retain official Komari compatibility and safe legacy-agent fallbacks.
+
 ## 0.2.1 - 2026-10-17
 
 - Handle production private-site HTTP 401/403 envelopes as login-required, not a
