@@ -13,6 +13,7 @@
 ## 已实现
 
 - 节点在线状态、CPU / 内存 / 磁盘、收发速率、到期提醒、按设置汇率折算月度支出。
+- 费用明细与管理员可视化编辑：逐节点人民币溢价 / 折价、固定期月摊、排除节点及汇率。
 - 搜索、分组、仅在线筛选、排序、详情弹窗、浅色 / 深色模式、320px 起的移动端布局。
 - 实际延迟任务的一小时历史、失败比例、协议 / 地址族区分；参考目标不混入主目标评分。
 - 后台管理式主题设置、私有站点登录（含两步验证码）、保留原有管理后台。
@@ -24,7 +25,8 @@
 
 1. 在 Release 下载 **`nekomari-mint.zip`**，不要下载 GitHub 的 Source code ZIP。
 2. 在 Komari / Nekomari 管理后台的主题页导入 ZIP，再启用 **Nekomari Mint**。
-3. 打开 **Mint 主题设置**，选择三网任务，按需填写汇率和首页文案。
+3. 打开 **Mint 主题设置**，选择三网任务，按需填写汇率、溢价与首页文案。
+4. 首页先“显示费用”，再打开月度支出“明细”，管理员可逐节点编辑溢价 / 日期 / 摊销月数。
 
 无需独立 Web 服务、数据库或公网 API token。浏览器仅访问当前面板同源 API；字体随包提供。
 按站点根路径 `/` 部署；反向代理子路径暂不声明支持。
@@ -90,6 +92,6 @@ MIT, Aone2233. Built with React, Vite, Lucide and Manrope (their respective
 licenses remain applicable; see `docs/THIRD-PARTY.md`). Compatible with
 [Komari](https://github.com/komari-monitor/komari) and
 [Nekomari](https://github.com/Aone2233/Nekomari); not an official Komari project.
-Operational controls in 0.2.0 are inspired by
+Operational controls and cost/premium separation are inspired by
 [Komari-Theme-SAO](https://github.com/WAOR/Komari-Theme-SAO) (MIT);
 implemented independently for Mint without copying its source or artwork.

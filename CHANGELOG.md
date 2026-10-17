@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0 - 2026-10-17
+
+- Add per-node CNY premiums/discounts, explicit acquisition dates and fixed amortization periods.
+- Separate recurring monthly cost, one-time premium and active premium amortization; opt in to an effective monthly estimate.
+- Add managed cost settings, excluded-node selectors and an authenticated visual cost editor using the standard theme settings API.
+- Normalize currency aliases and annual/multi-year billing; retain explicit unknown and missing-rate warnings.
+- Preserve fresh unrelated settings and selector serialization; reject concurrent cost edits and expired sessions.
+
 ## 0.3.0 - 2026-10-17
 
 - Support the installed Passkey plugin login mount points and Mint button styling.

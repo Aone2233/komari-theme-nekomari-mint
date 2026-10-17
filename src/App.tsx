@@ -69,6 +69,7 @@ import {
   healthyConnections,
 } from "./enhancements";
 const History = lazy(() => import("./History"));
+const CostPanel = lazy(() => import("./CostPanel"));
 
 const services = [
   ["chatgpt", "ChatGPT"],
@@ -859,6 +860,7 @@ export function App() {
   const [hideCosts, setHideCosts] = useState(
     () => localStorage.getItem("mint-hide-costs") !== "false",
   );
+  const [costOpen, setCostOpen] = useState(false);
   useEffect(() => {
     localStorage.setItem("mint-view", view);
     localStorage.setItem("mint-hide-costs", String(hideCosts));
@@ -898,6 +900,7 @@ export function App() {
         setNodes([]);
         setLive({});
         setDetail(null);
+        setCostOpen(false);
         setPrivateSite(true);
         try {
           setSite(await rpc<Site>("public:getPublicSettings"));
@@ -937,6 +940,7 @@ export function App() {
               setNodes([]);
               setLive({});
               setDetail(null);
+              setCostOpen(false);
               setPrivateSite(true);
             }
           }
@@ -1128,25 +1132,47 @@ export function App() {
                   在线节点收发速率合计 · {rates.measured} / {onlineCount} 台有效
                 </small>
               </div>
-              <div className="overview-item">
+              <div className="overview-item cost-overview">
                 <div className="stat-label">
                   <Database size={16} />
                   月度支出
+                  <button
+                    className="cost-details-button"
+                    aria-label="费用与溢价设置"
+                    onClick={() => setCostOpen(true)}
+                  >
+                    明细
+                  </button>
                 </div>
                 <div className="stat-value">
                   <sup>¥</sup>
                   {hideCosts
                     ? "••••"
-                    : monthly.included
+                    : monthly.included ||
+                        (monthly.includePremium && monthly.amortized > 0)
                       ? monthly.total.toFixed(2)
                       : "—"}
                   <span>/ 月</span>
                 </div>
                 <small>
-                  {monthly.included} 台已填价格
+                  {monthly.included} 台已计入
                   {monthly.skipped
                     ? ` · ${monthly.skipped} 台缺汇率未计入`
-                    : " · 按设置汇率折算人民币"}
+                    : ""}
+                  {monthly.unpriced ? ` · ${monthly.unpriced} 台未填价格` : ""}
+                  {monthly.invalidCycle
+                    ? ` · ${monthly.invalidCycle} 台周期无效`
+                    : ""}
+                  {monthly.ignored ? ` · ${monthly.ignored} 台已排除` : ""}
+                </small>
+                <small className="cost-basis">
+                  {monthly.includePremium
+                    ? "含当前溢价月摊 · 月均估算"
+                    : "续费月费 · 不含一次性溢价"}
+                  {monthly.pendingPremiums
+                    ? ` · ${monthly.pendingPremiums} 笔待摊销配置`
+                    : ""}
+                  {monthly.warnings.length ? " · 配置异常，见明细" : ""}
                 </small>
               </div>
               <div className="overview-item">
@@ -1308,7 +1334,7 @@ export function App() {
         <footer>
           <span className="footer-brand">
             <Leaf size={15} />
-            Nekomari Mint <span>v0.2.1</span>
+            Nekomari Mint <span>v0.4.0</span>
           </span>
           <p>
             {String(
@@ -1334,6 +1360,23 @@ export function App() {
           settings={site.theme_settings}
           onClose={() => setDetail(null)}
         />
+      )}
+      {costOpen && !privateSite && (
+        <Suspense
+          fallback={
+            <div className="cost-loading" role="status">
+              正在加载费用明细…
+            </div>
+          }
+        >
+          <CostPanel
+            nodes={nodes}
+            settings={site.theme_settings}
+            hideAmounts={hideCosts}
+            onClose={() => setCostOpen(false)}
+            onSaved={() => void refresh()}
+          />
+        </Suspense>
       )}
     </>
   );

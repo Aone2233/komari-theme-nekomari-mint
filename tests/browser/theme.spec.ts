@@ -34,7 +34,11 @@ test("private login retains the Passkey plugin mount contract", async ({
 export async function fixture(
   page: Page,
   mode: "nekomari" | "official" | "private" | "empty" = "nekomari",
+  options: { settings?: Record<string, unknown>; loggedIn?: boolean } = {},
 ) {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({ json: { logged_in: options.loggedIn === true } }),
+  );
   const names = [
     "vpsTaxi · 东京软银",
     "CloudLane · 香港",
@@ -122,7 +126,7 @@ export async function fixture(
           result = {
             sitename: "Nekomari",
             private_site: mode === "private",
-            theme_settings: {},
+            theme_settings: options.settings || {},
           };
           break;
         case "common:getNodes":
@@ -230,6 +234,174 @@ export async function fixture(
     });
   });
 }
+
+test("cost details keep hidden amounts hidden and guests cannot edit", async ({
+  page,
+}) => {
+  await fixture(page, "nekomari", {
+    settings: { costPremiums: '{"node-0":120}' },
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "费用与溢价设置" }).click();
+  const dialog = page.getByRole("dialog", { name: "费用与溢价" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator(".cost-totals")).toContainText("••••");
+  await expect(dialog.locator(".cost-totals")).not.toContainText("120");
+  await expect(
+    dialog.getByRole("button", { name: "编辑费用设置" }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+});
+
+test("cost editor saves premiums through host API and preserves unrelated settings and absent nodes", async ({
+  page,
+}) => {
+  const settings: Record<string, unknown> = {
+    headline: "保留我的标题",
+    showExtensions: false,
+    exchangeRates: '{"USD":7}',
+    costPremiums:
+      '{"absent-node":{"amount":75,"acquiredAt":"2026-01-01","months":12}}',
+    costIgnoredNodes: ["absent-node"],
+    unrelatedExtension: { keep: true },
+    telecomTasks: [17],
+  };
+  await fixture(page, "nekomari", { settings, loggedIn: true });
+  let saved: Record<string, unknown> | undefined;
+  await page.route(
+    "**/api/admin/theme/settings?theme=nekomari-mint",
+    async (route) => {
+      saved = route.request().postDataJSON();
+      Object.assign(settings, saved);
+      await route.fulfill({ json: { status: "success", data: null } });
+    },
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "显示费用", exact: true }).click();
+  await page.getByRole("button", { name: "费用与溢价设置" }).click();
+  await page.getByRole("button", { name: "编辑费用设置" }).click();
+  await page.getByLabel("vpsTaxi · 东京软银 溢价金额").fill("120");
+  await page
+    .getByLabel("vpsTaxi · 东京软银 收购日期")
+    .fill(new Date().toISOString().slice(0, 10));
+  await page.getByLabel("vpsTaxi · 东京软银 摊销月数").fill("12");
+  await page.getByLabel("CloudLane · 香港 排除统计").check();
+  await page.getByLabel("月度支出包含当前溢价月摊").check();
+  await page.getByRole("button", { name: "保存费用设置" }).click();
+  await expect(page.getByRole("status")).toContainText("费用设置已保存");
+  expect(saved?.headline).toBe("保留我的标题");
+  expect(saved?.unrelatedExtension).toEqual({ keep: true });
+  expect(JSON.parse(saved?.costIgnoredNodes as string)).toEqual([
+    "absent-node",
+    "node-1",
+  ]);
+  expect(JSON.parse(saved?.telecomTasks as string)).toEqual([17]);
+  const premiums = JSON.parse(saved?.costPremiums as string);
+  expect(premiums["absent-node"].amount).toBe(75);
+  expect(premiums["node-0"]).toMatchObject({ amount: 120, months: 12 });
+  await page.getByLabel("关闭费用详情").click();
+  await expect(page.locator(".cost-overview")).toContainText("261.00");
+  await expect(page.locator(".cost-overview")).toContainText("含当前溢价月摊");
+  await page.getByRole("button", { name: "费用与溢价设置" }).click();
+  await expect(page.locator(".cost-totals")).toContainText("120.00");
+  await page.setViewportSize({ width: 320, height: 1000 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  expect(
+    await page
+      .locator(".cost-panel")
+      .evaluate((e) => e.scrollWidth <= e.clientWidth),
+  ).toBe(true);
+});
+
+test("invalid financial input is rejected without a settings write", async ({
+  page,
+}) => {
+  await fixture(page, "nekomari", { loggedIn: true });
+  let writes = 0;
+  await page.route(
+    "**/api/admin/theme/settings?theme=nekomari-mint",
+    async (route) => {
+      writes++;
+      await route.fulfill({ json: { status: "success" } });
+    },
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "显示费用", exact: true }).click();
+  await page.getByRole("button", { name: "费用与溢价设置" }).click();
+  await page.getByRole("button", { name: "编辑费用设置" }).click();
+  await page.getByLabel("人民币汇率 JSON", { exact: true }).fill("not json");
+  await page.getByRole("button", { name: "保存费用设置" }).click();
+  await expect(page.getByRole("alert")).toContainText("JSON 格式错误");
+  expect(writes).toBe(0);
+});
+
+test("cost editor refuses stale-session and concurrent settings writes", async ({
+  page,
+}) => {
+  const settings: Record<string, unknown> = { exchangeRates: "{}" };
+  await fixture(page, "nekomari", { settings, loggedIn: true });
+  let writes = 0;
+  await page.route(
+    "**/api/admin/theme/settings?theme=nekomari-mint",
+    async (route) => {
+      writes++;
+      await route.fulfill({ json: { status: "success" } });
+    },
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "显示费用", exact: true }).click();
+  await page.getByRole("button", { name: "费用与溢价设置" }).click();
+  await page.getByRole("button", { name: "编辑费用设置" }).click();
+  settings.costIncludePremium = true;
+  await page.getByRole("button", { name: "保存费用设置" }).click();
+  await expect(page.getByRole("alert")).toContainText("其他页面修改");
+  expect(writes).toBe(0);
+  delete settings.costIncludePremium;
+  await page.route("**/api/me", (route) =>
+    route.fulfill({ json: { logged_in: false } }),
+  );
+  await page.getByRole("button", { name: "保存费用设置" }).click();
+  await expect(page.getByRole("alert")).toContainText("登录会话已失效");
+  expect(writes).toBe(0);
+});
+
+test("cost editor preserves the draft after an HTTP save failure", async ({
+  page,
+}) => {
+  await fixture(page, "official", { loggedIn: true });
+  await page.route("**/api/admin/theme/settings?theme=nekomari-mint", (route) =>
+    route.fulfill({ status: 500, json: { status: "error" } }),
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "显示费用", exact: true }).click();
+  await page.getByRole("button", { name: "费用与溢价设置" }).click();
+  await page.getByRole("button", { name: "编辑费用设置" }).click();
+  await page.getByLabel("vpsTaxi · 东京软银 溢价金额").fill("-20");
+  await page.getByRole("button", { name: "保存费用设置" }).click();
+  await expect(page.getByRole("alert")).toContainText("保存失败 (500)");
+  await expect(page.getByLabel("vpsTaxi · 东京软银 溢价金额")).toHaveValue(
+    "-20",
+  );
+});
+
+test("private session revocation closes the cost panel and clears node names", async ({
+  page,
+}) => {
+  await fixture(page, "nekomari", { loggedIn: true });
+  await page.goto("/");
+  await page.getByRole("button", { name: "显示费用", exact: true }).click();
+  await page.getByRole("button", { name: "费用与溢价设置" }).click();
+  await expect(page.getByRole("dialog", { name: "费用与溢价" })).toBeVisible();
+  await fixture(page, "private");
+  await expect(page.locator(".login-panel")).toBeVisible({ timeout: 12000 });
+  await expect(page.locator(".cost-panel")).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText("vpsTaxi · 东京软银");
+});
 
 test("desktop: real data states, search, grouping, details and dark mode", async ({
   page,

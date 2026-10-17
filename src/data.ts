@@ -221,41 +221,7 @@ export function traffic(
     basis: `本期 · ${type}`,
   };
 }
-export function monthlyTotal(
-  nodes: NodeInfo[],
-  settings?: Site["theme_settings"],
-) {
-  let rates: Record<string, unknown> = { CNY: 1, RMB: 1, "¥": 1 };
-  try {
-    const v = JSON.parse(String(settings?.exchangeRates || "{}"));
-    if (v && typeof v === "object" && !Array.isArray(v))
-      rates = { ...rates, ...v };
-  } catch {
-    /* Invalid configuration is treated as missing rates. */
-  }
-  let total = 0,
-    included = 0,
-    skipped = 0;
-  for (const node of nodes) {
-    if (
-      !(
-        node.price &&
-        node.price > 0 &&
-        node.billing_cycle &&
-        node.billing_cycle > 0
-      )
-    )
-      continue;
-    const rate = number(rates[node.currency || ""]);
-    if (!rate || rate <= 0) {
-      skipped++;
-      continue;
-    }
-    total += (node.price * rate * 30) / node.billing_cycle;
-    included++;
-  }
-  return { total, included, skipped };
-}
+export { monthlyTotal } from "./cost";
 
 export function sumRates(statuses: (LiveStatus | undefined)[]) {
   const valid = statuses.filter(online).flatMap((status) => {

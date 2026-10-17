@@ -15,7 +15,7 @@ export interface NodeInfo {
   traffic_limit_type?: string;
   price?: number;
   currency?: string;
-  billing_cycle?: number;
+  billing_cycle?: number | string;
   expired_at?: string;
   weight?: number;
   public_remark?: string;

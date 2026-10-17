@@ -2,7 +2,7 @@
   "name": "Nekomari Mint",
   "short": "nekomari-mint",
   "description": "薄荷绿线路监控主题：真实延迟、丢包、资源与账单，支持 Nekomari 扩展。",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": "Aone2233",
   "url": "https://github.com/Aone2233/komari-theme-nekomari-mint",
   "preview": "preview.png",
@@ -54,11 +54,40 @@
         "default": "[]"
       },
       {
+        "type": "title",
+        "name": "费用与溢价"
+      },
+      {
         "key": "exchangeRates",
         "type": "string",
         "name": "人民币汇率 JSON",
         "default": "{\"CNY\":1,\"RMB\":1,\"¥\":1}",
-        "help": "手动设置，如 {\"USD\":7.2,\"$\":7.2,\"EUR\":7.8}。无汇率不计入人民币合计，不猜测实时汇率。"
+        "help": "例如 {\"USD\":7.2,\"EUR\":7.8}，表示 1 单位外币折合人民币。支持 USD/$、EUR/€ 等别名；人民币固定为 1。缺币种或汇率不计入，不请求实时外汇服务。"
+      },
+      {
+        "key": "costIncludePremium",
+        "type": "switch",
+        "name": "月度支出包含溢价月摊",
+        "default": false,
+        "help": "关闭时仅显示续费月费；开启后加上当前有效的溢价/折价月摊。一次性溢价不会全额计入每个月。"
+      },
+      {
+        "key": "costIgnoredNodes",
+        "type": "nodes",
+        "name": "不参与费用统计的节点",
+        "default": "[]",
+        "help": "整台节点退出费用统计，续费费用和溢价均排除；不改变节点资料或监控。"
+      },
+      {
+        "key": "costPremiums",
+        "type": "richtext",
+        "name": "节点溢价 JSON",
+        "default": "{}",
+        "help": "推荐在首页月度支出“明细”中以管理员身份可视化编辑。按 UUID 配置，例如 {\"节点UUID\":{\"amount\":120,\"acquiredAt\":\"2026-10-01\",\"months\":12}}。amount 为人民币额外溢价（不是总收购价），负数表示折价；日期和月数缺失时仅计一次性总额，不摊销。每月按 30 天、UTC 日期计算，期满停止，不随续费变化。设置公开，勿填写秘密。"
+      },
+      {
+        "type": "title",
+        "name": "页脚"
       },
       {
         "key": "footer",

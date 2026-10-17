@@ -321,6 +321,159 @@ h1 {
   align-self: flex-start;
   line-height: 1.9;
 }
+.cost-details-button {
+  margin-left: auto;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--green);
+  font-size: 10px;
+  cursor: pointer;
+}
+.cost-overview > small {
+  display: block;
+  line-height: 1.6;
+}
+.cost-basis {
+  margin-top: 3px;
+}
+.cost-panel {
+  width: min(940px, calc(100vw - 32px));
+}
+.cost-explainer {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.cost-totals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+.cost-totals > div {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 15px;
+  background: var(--soft);
+}
+.cost-totals small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.cost-totals b {
+  font-size: 20px;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.cost-edit-button {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--green);
+  margin-bottom: 12px;
+}
+.cost-settings label,
+.cost-node-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--ink);
+  font-size: 11px;
+  min-width: 0;
+}
+.cost-panel input:not([type="checkbox"]),
+.cost-panel textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 9px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+.cost-panel label.cost-check {
+  flex-direction: row;
+  align-items: center;
+  margin: 8px 0;
+}
+.cost-check input {
+  accent-color: var(--green);
+}
+.cost-node-list {
+  margin: 18px 0;
+}
+.cost-node {
+  border-top: 1px solid var(--border);
+  padding: 15px 0;
+}
+.cost-node-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.cost-node-heading span,
+.cost-node-values {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+.cost-node-fields {
+  display: grid;
+  grid-template-columns: 0.7fr 1fr 1.2fr 0.8fr;
+  gap: 14px;
+  margin-top: 12px;
+}
+.cost-clear-button {
+  grid-column: 1 / -1;
+  justify-self: end;
+  color: var(--muted);
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.cost-panel [role="alert"] {
+  color: var(--red);
+  font-size: 12px;
+}
+.cost-panel [role="status"] {
+  color: var(--green);
+  font-size: 12px;
+}
+.cost-panel button:focus-visible,
+.cost-panel input:focus-visible,
+.cost-panel textarea:focus-visible,
+.cost-details-button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.cost-loading {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+}
+@media (max-width: 760px) {
+  .cost-totals,
+  .cost-node-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cost-panel.detail {
+    padding: 20px;
+  }
+}
 .traffic-stat {
   display: flex;
   gap: 14px;
