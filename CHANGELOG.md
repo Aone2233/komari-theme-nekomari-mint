@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1 - 2026-10-17
+
+- Add independent 1/6/24-hour latency history selection, querying and filtering the actual selected time window while keeping homepage cards at one hour.
+- Cancel superseded requests, reject late range responses and never relabel another range's cached samples on loading or failure.
+- Show dates across longer time axes and clarify retention/aggregation limits without fabricating older records.
+- Widen node details to 1040px on desktop; wrap long node/CPU/evidence text and use shrinkable grid tracks to prevent horizontal scroll on mobile.
+
 ## 0.6.0 - 2026-10-17
 
 - Show exactly one primary latency line per homepage card, with per-node bindings and ordered task preferences; keep all detail line charts.

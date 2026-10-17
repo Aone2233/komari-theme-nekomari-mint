@@ -88,19 +88,22 @@ export function pingSeries(
   tasks: PingTask[],
   uuid: string,
   settings?: Site["theme_settings"],
+  window?: { start: number; end: number },
 ): PingSeries[] {
+  const end = window?.end ?? Date.now();
+  const start = window?.start ?? end - 3_600_000;
   const grouped = new Map<
     string,
     { task: PingTask; protocol: string; records: PingRecord[] }
   >();
   for (const record of records) {
-    const age = Date.now() - Date.parse(record.time);
+    const time = Date.parse(record.time);
     if (
       record.role === "reference" ||
       !Number.isFinite(record.value) ||
-      !Number.isFinite(age) ||
-      age < -30_000 ||
-      age > 3_600_000
+      !Number.isFinite(time) ||
+      time > end + (window ? 0 : 30_000) ||
+      time < start
     )
       continue;
     const task = tasks.find((t) => t.id === record.task_id);

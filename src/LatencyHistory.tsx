@@ -5,8 +5,9 @@ import { pingSeries } from "./data";
 import { nearestPing, pingGapMs } from "./latency";
 import type { PingRecord, PingTask, Site } from "./types";
 
-const localTime = (time: number) =>
-  new Date(time).toLocaleTimeString("zh-CN", {
+const localTime = (time: number, withDate = false) =>
+  new Date(time).toLocaleString("zh-CN", {
+    ...(withDate ? ({ month: "2-digit", day: "2-digit" } as const) : {}),
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -25,7 +26,10 @@ export default function LatencyHistory({
   tasks: PingTask[];
   settings?: Site["theme_settings"];
 }) {
+  const [hours, setHours] = useState(1);
   const [snapshot, setSnapshot] = useState({
+    uuid,
+    hours: 1,
     records: initialRecords,
     end: Date.now(),
   });
@@ -45,15 +49,16 @@ export default function LatencyHistory({
       setBusy(true);
       setError("");
       try {
-        const records = await loadPings(uuid, controller.signal);
-        if (active) setSnapshot({ records, end: Date.now() });
+        const records = await loadPings(uuid, controller.signal, hours);
+        if (active) setSnapshot({ uuid, hours, records, end: Date.now() });
       } catch (e) {
         if (!active) return;
-        if (isPrivateError(e)) setSnapshot({ records: [], end: Date.now() });
+        if (isPrivateError(e))
+          setSnapshot({ uuid, hours, records: [], end: Date.now() });
         setError(
           isPrivateError(e)
             ? "会话已失效，请重新登录"
-            : "更新失败，当前保留上次样本；请重试",
+            : `近 ${hours} 小时更新失败；仅保留此范围上次样本（如有），请重试`,
         );
       } finally {
         clearTimeout(timeout);
@@ -70,23 +75,30 @@ export default function LatencyHistory({
       clearTimeout(timer);
       clearTimeout(timeout);
     };
-  }, [uuid, revision]);
+  }, [uuid, hours, revision]);
+  // A range's old response must never masquerade as the newly selected range.
+  const current =
+    snapshot.uuid === uuid && snapshot.hours === hours ? snapshot : null;
+  const end = current?.end ?? Date.now();
+  const start = end - hours * 3600000;
   const rows = useMemo(
     () =>
-      pingSeries(snapshot.records, tasks, uuid, settings).map((row, i) => ({
+      pingSeries(current?.records || [], tasks, uuid, settings, {
+        start,
+        end,
+      }).map((row, i) => ({
         ...row,
         color: `var(--ping-${i % 8})`,
         dash: i < 8 ? undefined : "5 3",
         gap: pingGapMs(
           tasks.find((t) => t.id === row.records[0].task_id)?.interval,
           row.records,
+          hours,
         ),
       })),
-    [snapshot, tasks, uuid, settings],
+    [current, tasks, uuid, settings, start, end, hours],
   );
   const visible = rows.filter((row) => !hidden.has(row.key));
-  const start = snapshot.end - 3600000,
-    end = snapshot.end;
   const peak = visible.reduce(
     (max, row) => row.records.reduce((m, r) => Math.max(m, r.value), max),
     0,
@@ -105,19 +117,36 @@ export default function LatencyHistory({
   return (
     <section className="latency-history" aria-label="线路观测">
       <div className="history-heading">
-        <h3>
-          线路观测 <small>近 1 小时</small>
-        </h3>
-        <button
-          className="latency-refresh"
-          disabled={busy}
-          onClick={() => setRevision((v) => v + 1)}
-        >
-          {busy ? "更新中…" : "刷新"}
-        </button>
+        <h3>线路观测</h3>
+        <div className="latency-controls">
+          <select
+            aria-label="线路历史时间范围"
+            value={hours}
+            onChange={(e) => {
+              setHours(Number(e.target.value));
+              setCursor(null);
+              setError("");
+            }}
+          >
+            {[1, 6, 24].map((h) => (
+              <option key={h} value={h}>
+                近 {h} 小时
+              </option>
+            ))}
+          </select>
+          <button
+            className="latency-refresh"
+            disabled={busy}
+            onClick={() => setRevision((v) => v + 1)}
+          >
+            {busy ? "更新中…" : "刷新"}
+          </button>
+        </div>
       </div>
       <p className="empty-note">
-        真实延迟 · 点击图例显隐 · 丢包与断档不连线 · × 表示失败，不是 0 ms
+        近 {hours} 小时真实延迟 · 点击图例显隐 · 丢包与断档不连线 · ×
+        表示失败，不是 0 ms
+        {hours > 1 && " · 标准聚合时间网格适配，不把稀疏记录当连续采样"}
       </p>
       {error && (
         <p role="alert" className="empty-note">
@@ -130,7 +159,7 @@ export default function LatencyHistory({
             ? "正在读取线路历史…"
             : error
               ? "暂无可显示的样本。"
-              : "暂无历史。请在后台添加延迟监测任务，并分配给此节点。"}
+              : "暂无历史。此范围内未返回样本，请确认历史保留时长、任务已配置并分配给此节点。"}
         </p>
       ) : (
         <>
@@ -231,9 +260,9 @@ export default function LatencyHistory({
                   )}
                 </svg>
                 <div className="chart-times">
-                  <span>{localTime(start)}</span>
-                  <span>{localTime((start + end) / 2)}</span>
-                  <span>{localTime(end)}</span>
+                  <span>{localTime(start, hours > 1)}</span>
+                  <span>{localTime((start + end) / 2, hours > 1)}</span>
+                  <span>{localTime(end, hours > 1)}</span>
                 </div>
               </div>
               <label className="latency-scrubber">
@@ -244,7 +273,7 @@ export default function LatencyHistory({
                   max="1000"
                   value={cursor ?? 1000}
                   aria-label="线路采样时刻"
-                  aria-valuetext={localTime(selectedTime ?? end)}
+                  aria-valuetext={localTime(selectedTime ?? end, hours > 1)}
                   onFocus={() => setCursor((value) => value ?? 1000)}
                   onChange={(e) => setCursor(Number(e.target.value))}
                 />
@@ -258,7 +287,7 @@ export default function LatencyHistory({
                   <span>悬停图表，或拖动时间轴 / 使用方向键查看采样。</span>
                 ) : (
                   <>
-                    <time>{localTime(selectedTime)}</time>
+                    <time>{localTime(selectedTime, hours > 1)}</time>
                     {visible.map((row) => {
                       const point = nearestPing(
                         row.records,
@@ -284,7 +313,7 @@ export default function LatencyHistory({
                           </b>
                           {point && (
                             <small>
-                              （{localTime(Date.parse(point.time))}）
+                              （{localTime(Date.parse(point.time), hours > 1)}）
                             </small>
                           )}
                         </span>
@@ -298,7 +327,9 @@ export default function LatencyHistory({
             <p className="empty-note">已隐藏全部线路，点击图例恢复显示。</p>
           )}
           <details className="latency-stats">
-            <summary>样本统计与观测依据 · {rows.length} 条线路</summary>
+            <summary>
+              样本统计与观测依据 · 近 {hours} 小时 · {rows.length} 条线路
+            </summary>
             {rows.map((row) => (
               <p key={row.key}>
                 {row.name} · {row.protocol.toUpperCase()} /{" "}
@@ -311,6 +342,7 @@ export default function LatencyHistory({
           <p className="empty-note">
             更新于 {localTime(end)} · 每 60 秒刷新 ·
             时间为浏览器本地时区；丢包率仅统计已返回的样本，不把缺测计为成功。
+            实际历史长度取决于面板保留设置，旧记录可能已聚合，不补造缺失样本。
           </p>
         </>
       )}

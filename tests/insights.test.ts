@@ -94,3 +94,41 @@ test("minute-aligned history rollups do not look like sub-minute outages", () =>
     37500,
   );
 });
+test("long-range rollup grids connect consecutive buckets but never bridge sparse or off-grid history", () => {
+  const records = [0, 300000, 600000, 3600000].map((time) => ({
+    task_id: 1,
+    time: new Date(time).toISOString(),
+    value: 10,
+  }));
+  assert.equal(pingGapMs(60, records), 150000);
+  assert.equal(pingGapMs(60, records, 24), 750000);
+  assert.equal(
+    chartSegments(records, 0, 3700000, 20, pingGapMs(60, records, 24)).length,
+    2,
+  );
+  assert.equal(
+    pingGapMs(
+      60,
+      records.filter((_, i) => i !== 1),
+      24,
+    ),
+    150000,
+  );
+  assert.equal(
+    pingGapMs(
+      60,
+      records.map((r) => ({
+        ...r,
+        time: new Date(Date.parse(r.time) + 60000).toISOString(),
+      })),
+      24,
+    ),
+    150000,
+  );
+  const hourly = [0, 3600000, 7200000].map((time) => ({
+    task_id: 1,
+    time: new Date(time).toISOString(),
+    value: 10,
+  }));
+  assert.equal(pingGapMs(60, hourly, 24), 9000000);
+});

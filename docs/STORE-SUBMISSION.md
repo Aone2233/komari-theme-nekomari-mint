@@ -9,7 +9,7 @@
 ## 表单内容
 
 - GitHub 仓库地址：`https://github.com/Aone2233/komari-theme-nekomari-mint`
-- 预览图链接：`https://raw.githubusercontent.com/Aone2233/komari-theme-nekomari-mint/v0.6.0/preview.png`
+- 预览图链接：`https://raw.githubusercontent.com/Aone2233/komari-theme-nekomari-mint/v0.6.1/preview.png`
 - 确认项：仓库公开且最新 Release 提供可下载主题包。
 
 使用官方 [theme-market 仓库](https://github.com/komari-monitor/theme-market) 的
@@ -18,7 +18,7 @@
 
 ## 说明（可放在补充评论中）
 
-Nekomari Mint，short `nekomari-mint`，MIT，版本 0.6.0。
+Nekomari Mint，short `nekomari-mint`，MIT，版本 0.6.1。
 独立 Komari 标准 ZIP，已使用官方 Komari 1.6.0 + 官方 Agent 1.5.11 做真实导入和采样验证。
 不替换管理后台，不要求安装 Nekomari；可选 Nekomari 检测扩展不存在时安全降级。
 无检测结果不显示正常，不生成 IP 信誉分。预览图使用明确标注的演示数据。
@@ -37,7 +37,7 @@ https://github.com/Aone2233/komari-theme-nekomari-mint
 
 ### 预览图链接 / Preview image URL
 
-https://raw.githubusercontent.com/Aone2233/komari-theme-nekomari-mint/v0.6.0/preview.png
+https://raw.githubusercontent.com/Aone2233/komari-theme-nekomari-mint/v0.6.1/preview.png
 
 ### 我已确保 / I confirm
 

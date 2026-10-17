@@ -116,6 +116,44 @@ try {
     );
   await page.locator(".latency-plot").scrollIntoViewIfNeeded();
   await page.screenshot({ path: resolve(output, "detail-latency.png") });
+  const latencyRanges = [];
+  for (const hours of [6, 24, 1]) {
+    const response = page.waitForResponse((r) => {
+      if (!r.url().endsWith("/api/rpc2") || r.request().method() !== "POST")
+        return false;
+      const req = r.request().postDataJSON();
+      return (
+        req.method === "public:getPingRecords" &&
+        req.params.hours === String(hours)
+      );
+    });
+    await page.getByLabel("线路历史时间范围").selectOption(String(hours));
+    const body = await (await response).json();
+    if (body.error || !Array.isArray(body.result?.records))
+      throw Error("Range history request failed");
+    await page
+      .locator(".latency-history .latency-refresh:not([disabled])")
+      .waitFor();
+    await page.locator(".latency-plot").waitFor();
+    const paths = await page
+      .locator(".latency-line")
+      .evaluateAll((ps) => ps.map((p) => p.getAttribute("d") || ""));
+    if (!paths.some((d) => (d.match(/L/g) || []).length >= 3))
+      throw Error(
+        `Range ${hours}h only has isolated dots; check aggregate grid handling`,
+      );
+    latencyRanges.push({ hours, returnedSamples: body.result.records.length });
+  }
+  for (const width of [1440, 768, 390, 320]) {
+    await page.setViewportSize({ width, height: 1100 });
+    if (
+      await page
+        .locator(".node-detail")
+        .evaluate((el) => el.scrollWidth > el.clientWidth)
+    )
+      throw Error(`Node detail horizontal overflow at ${width}px`);
+  }
+  await page.setViewportSize({ width: 1440, height: 1100 });
   await page.keyboard.press("Escape");
   let adminReachable = null;
   if (process.env.MINT_SMOKE_CREDENTIALS) {
@@ -148,6 +186,8 @@ try {
     realPingHistory: true,
     realResourceHistory: true,
     realLatencyLines: true,
+    latencyRanges,
+    detailHorizontalOverflow: false,
     onePrimaryLinePerCard: true,
     cpuGuidance: true,
     detail: true,

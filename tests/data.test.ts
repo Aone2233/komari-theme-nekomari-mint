@@ -50,6 +50,28 @@ const record = (value: number, extra = {}): PingRecord => ({
   time: new Date(now - 1000).toISOString(),
   ...extra,
 });
+test("detail ping ranges retain older history and failures without changing the card's one-hour window", () => {
+  const records = [
+    record(0),
+    record(-1, { time: new Date(now - 2 * 3600000).toISOString() }),
+    record(80, { time: new Date(now - 20 * 3600000).toISOString() }),
+    record(900, { time: new Date(now - 25 * 3600000).toISOString() }),
+    record(999, { role: "reference" }),
+    record(999, { time: new Date(now + 1000).toISOString() }),
+  ];
+  const range = (hours: number) =>
+    pingSeries(records, [task], "node", undefined, {
+      start: now - hours * 3600000,
+      end: now,
+    })[0];
+  assert.equal(range(1).total, 1);
+  assert.equal(range(6).total, 2);
+  assert.equal(range(6).failures, 1);
+  assert.equal(range(24).total, 3);
+  assert.equal(range(24).latest, 0);
+  assert.equal(range(24).median, 40);
+  assert.equal(pingSeries(records.slice(0, 4), [task], "node")[0].total, 1);
+});
 test("unknown values stay unknown while measured zero stays zero", () => {
   assert.equal(percent(null, 100), null);
   assert.equal(percent(0, 100), 0);

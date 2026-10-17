@@ -61,12 +61,13 @@ export async function loadOverview() {
 export async function loadPings(
   uuid: string,
   signal?: AbortSignal,
+  hours = 1,
 ): Promise<PingRecord[]> {
   const result = await rpc<{ records: PingRecord[] }>(
     "public:getPingRecords",
     {
       uuid,
-      hours: "1",
+      hours: String(hours),
     },
     signal,
   );

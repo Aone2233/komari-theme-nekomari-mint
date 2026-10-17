@@ -579,7 +579,7 @@ test("SAO-inspired controls: cost privacy, list view, tags and lazy history", as
     .first()
     .click();
   await expect(page.getByLabel("CPU历史，19 个有效点")).toBeVisible();
-  await page.getByLabel("历史时间范围").selectOption("6");
+  await page.getByLabel("历史时间范围", { exact: true }).selectOption("6");
   await expect(page.getByLabel("CPU历史，19 个有效点")).toBeVisible();
   await page.keyboard.press("Escape");
   await page.reload();
@@ -640,9 +640,9 @@ test("history falls back only for a missing method and ignores a cancelled range
     .first()
     .click();
   await expect(page.getByLabel("CPU历史，2 个有效点")).toBeVisible();
-  await page.getByLabel("历史时间范围").selectOption("6");
+  await page.getByLabel("历史时间范围", { exact: true }).selectOption("6");
   await expect.poll(() => ranges.includes(6)).toBe(true);
-  await page.getByLabel("历史时间范围").selectOption("24");
+  await page.getByLabel("历史时间范围", { exact: true }).selectOption("24");
   await expect(page.getByLabel("CPU历史，3 个有效点")).toBeVisible();
   await page.waitForTimeout(500);
   await expect(page.getByLabel("CPU历史，3 个有效点")).toBeVisible();
@@ -772,7 +772,7 @@ test("unknown CPU stays unclassified, latency failures stay distinct across prot
     await route.fulfill({ status: 503, json: { message: "Unavailable" } });
   });
   await dialog.getByRole("button", { name: "刷新", exact: true }).click();
-  await expect(dialog.getByRole("alert")).toContainText("保留上次样本");
+  await expect(dialog.getByRole("alert")).toContainText("仅保留此范围上次样本");
   await expect(dialog.getByRole("img", { name: /延迟折线图/ })).toBeVisible();
 });
 
@@ -814,7 +814,7 @@ test("detail latency handles all-loss, empty and stale histories without implyin
   await expect(dialog.locator(".latency-failures")).toHaveAttribute("d", /M/);
   mode = "empty";
   await dialog.getByRole("button", { name: "刷新", exact: true }).click();
-  await expect(dialog.getByText(/暂无历史。请在后台/)).toBeVisible();
+  await expect(dialog.getByText(/暂无历史。此范围内未返回样本/)).toBeVisible();
   await expect(dialog.locator(".latency-plot")).toHaveCount(0);
   mode = "stale";
   await dialog.getByRole("button", { name: "刷新", exact: true }).click();
@@ -1022,4 +1022,150 @@ test("SAO premiums keep paid price, dynamic mode and selected primary tasks on e
   expect(JSON.parse(saved?.primaryPingTasks as string)).toEqual([3, 1]);
   expect(saved?.primaryPingByNode).toBe('{"node-0":2}');
   expect(saved?.costRateSnapshot).toBe("Frankfurter · 2026-10-17");
+});
+
+test("latency ranges fetch older samples, ignore late responses and retain only same-range history on failure", async ({
+  page,
+}) => {
+  await fixture(page);
+  const ranges: string[] = [];
+  let fail = false;
+  let releaseSix!: () => void;
+  const sixPending = new Promise<void>((resolve) => {
+    releaseSix = resolve;
+  });
+  await page.route("**/api/rpc2", async (route) => {
+    const req = route.request().postDataJSON();
+    if (req.method !== "public:getPingRecords") return route.fallback();
+    const hours = req.params.hours;
+    ranges.push(hours);
+    if (hours === "6") await sixPending;
+    if (fail)
+      return route.fulfill({ status: 503, json: { message: "Unavailable" } });
+    const now = Date.now();
+    const records = [
+      { task_id: 1, time: new Date(now - 1000).toISOString(), value: 0 },
+      {
+        task_id: 1,
+        time: new Date(now - 2 * 3600000).toISOString(),
+        value: -1,
+      },
+      {
+        task_id: 1,
+        time: new Date(now - 20 * 3600000).toISOString(),
+        value: 80,
+      },
+      {
+        task_id: 1,
+        time: new Date(now - 25 * 3600000).toISOString(),
+        value: 999,
+      },
+    ];
+    await route.fulfill({
+      json: { jsonrpc: "2.0", id: req.id, result: { records } },
+    });
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "节点详情", exact: true })
+    .first()
+    .click();
+  const section = page.getByLabel("线路观测"),
+    select = page.getByLabel("线路历史时间范围");
+  await expect(select).toHaveValue("1");
+  await expect(
+    section.getByRole("button", { name: "刷新", exact: true }),
+  ).toBeEnabled();
+  await section.locator(".latency-stats summary").click();
+  await expect(section.locator(".latency-stats")).toContainText(
+    "样本 1 · 失败 0",
+  );
+  await select.selectOption("6");
+  await expect.poll(() => ranges.includes("6")).toBe(true);
+  await expect(section.locator(".latency-plot")).toHaveCount(0);
+  await select.selectOption("24");
+  await expect(section.locator(".latency-stats")).toContainText("近 24 小时");
+  await section.locator(".latency-stats summary").click();
+  await expect(section.locator(".latency-stats")).toContainText(
+    "样本 3 · 失败 1",
+  );
+  releaseSix();
+  await page.waitForTimeout(150);
+  await expect(select).toHaveValue("24");
+  await expect(section.locator(".latency-stats")).toContainText(
+    "样本 3 · 失败 1",
+  );
+  await expect(section.locator(".chart-times")).toContainText(/\d{2}\/\d{2}/);
+  fail = true;
+  await section.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(section.getByRole("alert")).toContainText("近 24 小时更新失败");
+  await expect(section.locator(".latency-stats")).toContainText(
+    "样本 3 · 失败 1",
+  );
+  await select.selectOption("6");
+  await expect(section.getByRole("alert")).toContainText("近 6 小时更新失败");
+  await expect(section.locator(".latency-plot")).toHaveCount(0);
+  fail = false;
+  await section.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(section.locator(".latency-stats")).toContainText("近 6 小时");
+  await section.locator(".latency-stats summary").click();
+  await expect(section.locator(".latency-stats")).toContainText(
+    "样本 2 · 失败 1",
+  );
+  await expect(page.locator(".node-card .ping-row").first()).toHaveAttribute(
+    "title",
+    /近 1 小时/,
+  );
+});
+
+test("wide node detail wraps long metadata and evidence without horizontal scroll at every breakpoint", async ({
+  page,
+}) => {
+  const long = "VeryLongUnbrokenServerProviderProcessorAndProbeEvidence".repeat(
+    7,
+  );
+  await fixture(page, "nekomari", { cpuName: long });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "节点详情", exact: true })
+    .first()
+    .click();
+  const dialog = page.locator(".node-detail");
+  await expect(dialog.locator(".latency-plot")).toBeVisible();
+  await page.getByLabel("线路历史时间范围").selectOption("24");
+  await expect(dialog.locator(".latency-plot")).toBeVisible();
+  await dialog.evaluate((el, text) => {
+    el.querySelector("h2")!.textContent = text;
+    el.querySelector(".detail-state > span:last-child")!.textContent = text;
+    el.querySelectorAll(
+      ".evidence p, .latency-legend b, .route-evidence",
+    ).forEach((item) => {
+      item.textContent = text;
+    });
+  }, long);
+  for (const width of [1440, 1024, 768, 520, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await dialog.locator(".latency-plot").scrollIntoViewIfNeeded();
+    expect(
+      await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true);
+    expect(
+      await dialog.evaluate((el) => {
+        const rect = el.getBoundingClientRect();
+        return Array.from(
+          el.querySelectorAll(
+            "h2, .hardware b, .evidence p, .latency-legend button, select, .latency-plot",
+          ),
+        ).every((child) => {
+          const r = child.getBoundingClientRect();
+          return r.left >= rect.left && r.right <= rect.right;
+        });
+      }),
+    ).toBe(true);
+    if (width === 1440)
+      expect(
+        await dialog.evaluate((el) => el.getBoundingClientRect().width),
+      ).toBeGreaterThan(950);
+  }
+  await page.screenshot({ path: "test-results/detail-long-mobile.png" });
 });

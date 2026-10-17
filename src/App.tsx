@@ -621,7 +621,7 @@ function Detail({
   return (
     <dialog
       ref={dialog}
-      className="detail"
+      className="detail node-detail"
       onCancel={onClose}
       onClick={(e) => {
         if (e.target === dialog.current) onClose();
@@ -1329,7 +1329,7 @@ export function App() {
         <footer>
           <span className="footer-brand">
             <Leaf size={15} />
-            Nekomari Mint <span>v0.6.0</span>
+            Nekomari Mint <span>v0.6.1</span>
           </span>
           <p>
             {String(
