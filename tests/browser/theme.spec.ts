@@ -34,7 +34,12 @@ test("private login retains the Passkey plugin mount contract", async ({
 export async function fixture(
   page: Page,
   mode: "nekomari" | "official" | "private" | "empty" = "nekomari",
-  options: { settings?: Record<string, unknown>; loggedIn?: boolean } = {},
+  options: {
+    settings?: Record<string, unknown>;
+    loggedIn?: boolean;
+    cpuName?: string;
+    arch?: string;
+  } = {},
 ) {
   await page.route("**/api/me", (route) =>
     route.fulfill({ json: { logged_in: options.loggedIn === true } }),
@@ -70,9 +75,9 @@ export async function fixture(
           price: 25 + i * 9,
           currency: "CNY",
           billing_cycle: 30,
-          cpu_name: "AMD EPYC 7B13",
+          cpu_name: options.cpuName ?? "AMD EPYC 7B13",
           cpu_cores: 2,
-          arch: "amd64",
+          arch: options.arch || "amd64",
           os: "Debian 13",
           mem_total: 4294967296,
           disk_total: 42949672960,
@@ -636,4 +641,179 @@ test("history falls back only for a missing method and ignores a cancelled range
   await page.waitForTimeout(500);
   await expect(page.getByLabel("CPU历史，3 个有效点")).toBeVisible();
   await expect(page.locator(".resource-history [role=alert]")).toHaveCount(0);
+});
+
+test("detail shows sourced CPU guidance and interactive latency lines, never card bars", async ({
+  page,
+}) => {
+  await fixture(page, "nekomari", { cpuName: "Neoverse-N1", arch: "arm64" });
+  await page.goto("/");
+  await expect(page.locator(".node-card .history").first()).toBeVisible();
+  await page
+    .getByRole("button", { name: "节点详情", exact: true })
+    .first()
+    .click();
+  const dialog = page.locator("dialog");
+  await expect(dialog.getByLabel("处理器能力说明")).toContainText(
+    "通用服务区间",
+  );
+  await expect(dialog.getByLabel("架构信息")).toContainText("Armv8.2-A");
+  await expect(dialog.getByLabel("处理器能力说明")).toContainText(
+    "非厂商评级或跑分",
+  );
+  await expect(dialog.getByRole("link", { name: /Arm 官方/ })).toHaveAttribute(
+    "href",
+    "https://www.arm.com/products/silicon-ip-cpu/neoverse/neoverse-n1",
+  );
+  await expect(dialog.locator(".history, .ping-row")).toHaveCount(0);
+  await expect(
+    dialog.getByRole("img", { name: /延迟折线图，3 条线路/ }),
+  ).toBeVisible();
+  await expect(dialog.locator(".latency-failures").first()).toHaveAttribute(
+    "d",
+    /M/,
+  );
+  await dialog.locator(".latency-legend button").first().click();
+  await expect(
+    dialog.getByRole("img", { name: /延迟折线图，2 条线路/ }),
+  ).toBeVisible();
+  const scrubber = dialog.getByLabel("线路采样时刻");
+  await scrubber.focus();
+  await page.keyboard.press("Home");
+  for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowRight");
+  await expect(dialog.locator(".latency-readout b").first()).toContainText(
+    "ms",
+  );
+  await dialog
+    .locator(".latency-legend button[aria-pressed=true]")
+    .first()
+    .click();
+  await dialog
+    .locator(".latency-legend button[aria-pressed=true]")
+    .first()
+    .click();
+  await expect(
+    dialog.getByText("已隐藏全部线路，点击图例恢复显示。"),
+  ).toBeVisible();
+  await dialog.locator(".latency-legend button").first().click();
+  await page
+    .getByLabel("切换深色模式")
+    .evaluate((button: HTMLButtonElement) => button.click());
+  for (const width of [1440, 768, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(
+      await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true);
+  }
+  await dialog.locator(".cpu-insight").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "test-results/cpu-guide-mobile.png" });
+  await dialog.locator(".latency-plot").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "test-results/latency-mobile.png" });
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await dialog
+    .locator(".latency-legend button[aria-pressed=false]")
+    .first()
+    .click();
+  await dialog.locator(".latency-plot").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "test-results/latency-desktop.png" });
+});
+
+test("unknown CPU stays unclassified, latency failures stay distinct across protocols and families", async ({
+  page,
+}) => {
+  await fixture(page, "official", { cpuName: "AMD EPYC Processor" });
+  await page.route("**/api/rpc2", async (route) => {
+    const req = route.request().postDataJSON();
+    if (req.method !== "public:getPingRecords") return route.fallback();
+    const records = [
+      { value: -1, ping_type: "icmp", family: "ipv4" },
+      { value: 0, ping_type: "tcp", family: "ipv4" },
+      { value: 15, ping_type: "tcp", family: "ipv6" },
+      { value: 999, ping_type: "http", role: "reference" },
+    ].map((r) => ({
+      task_id: 1,
+      time: new Date(Date.now() - 1000).toISOString(),
+      ...r,
+    }));
+    await route.fulfill({
+      json: { jsonrpc: "2.0", id: req.id, result: { records } },
+    });
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "节点详情", exact: true })
+    .first()
+    .click();
+  const dialog = page.locator("dialog");
+  await expect(dialog.getByLabel("处理器能力说明")).toContainText(
+    "能力区间暂未归类",
+  );
+  await expect(dialog.getByLabel("处理器能力说明").locator("a")).toHaveCount(0);
+  await expect(
+    dialog.getByRole("img", { name: /延迟折线图，3 条线路/ }),
+  ).toBeVisible();
+  await expect(dialog.locator(".latency-legend")).toContainText("ICMP · IPV4");
+  await expect(dialog.locator(".latency-legend")).toContainText("TCP · IPV6");
+  const scrubber = dialog.getByLabel("线路采样时刻");
+  await scrubber.focus();
+  await page.keyboard.press("End");
+  await expect(dialog.locator(".latency-readout")).toContainText("探测失败");
+  await expect(dialog.locator(".latency-readout")).toContainText("0.0 ms");
+  await expect(dialog.locator(".latency-readout")).not.toContainText("999");
+  await page.route("**/api/rpc2", async (route) => {
+    if (route.request().postDataJSON().method !== "public:getPingRecords")
+      return route.fallback();
+    await route.fulfill({ status: 503, json: { message: "Unavailable" } });
+  });
+  await dialog.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("保留上次样本");
+  await expect(dialog.getByRole("img", { name: /延迟折线图/ })).toBeVisible();
+});
+
+test("detail latency handles all-loss, empty and stale histories without implying success", async ({
+  page,
+}) => {
+  await fixture(page);
+  let mode: "loss" | "empty" | "stale" = "loss";
+  await page.route("**/api/rpc2", async (route) => {
+    const req = route.request().postDataJSON();
+    if (req.method !== "public:getPingRecords") return route.fallback();
+    const records =
+      mode === "empty"
+        ? []
+        : [
+            {
+              task_id: 1,
+              time: new Date(
+                Date.now() - (mode === "stale" ? 600000 : 1000),
+              ).toISOString(),
+              value: mode === "loss" ? -1 : 12,
+            },
+          ];
+    await route.fulfill({
+      json: { jsonrpc: "2.0", id: req.id, result: { records } },
+    });
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "节点详情", exact: true })
+    .first()
+    .click();
+  const dialog = page.locator("dialog");
+  await expect(
+    dialog.getByRole("img", { name: /延迟折线图，1 条线路/ }),
+  ).toBeVisible();
+  await expect(dialog.locator(".latency-legend")).toContainText("丢包 100.0%");
+  await expect(dialog.locator(".latency-line")).toHaveCount(0);
+  await expect(dialog.locator(".latency-failures")).toHaveAttribute("d", /M/);
+  mode = "empty";
+  await dialog.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(dialog.getByText(/暂无历史。请在后台/)).toBeVisible();
+  await expect(dialog.locator(".latency-plot")).toHaveCount(0);
+  mode = "stale";
+  await dialog.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(dialog.locator(".latency-legend")).toContainText("样本过期");
+  await expect(dialog.locator(".latency-line")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("dialog")).toHaveCount(0);
 });

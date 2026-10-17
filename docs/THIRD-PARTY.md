@@ -21,3 +21,9 @@ by [Komari-Theme-SAO](https://github.com/WAOR/Komari-Theme-SAO) (MIT), inspected
 `2b6a015d8be2efd6944336a98753bd86b0a47b3b` (see upstream for current code).
 Mint's calculation and managed-settings editor are independently implemented;
 SAO's source, UI assets and automatic acquisition-value algorithms are not bundled.
+
+The detail latency chart also references SAO's multi-series line-chart interaction
+at the same commit. Mint independently implements its SVG chart, gap handling,
+sample inspection and legend without copying SAO code or bundling uPlot.
+CPU facts and source links are documented in `CPU-GUIDE.md`; capability labels are
+Mint's qualitative interpretation, not vendor ratings or benchmark results.

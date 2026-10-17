@@ -90,6 +90,16 @@ try {
     .getAttribute("aria-label");
   if (!historyLabel || /，0 个/.test(historyLabel))
     throw Error("Real CPU history is empty");
+  await page.getByLabel("处理器能力说明").waitFor();
+  await page.getByRole("img", { name: /延迟折线图，/ }).waitFor();
+  if (await page.locator("dialog .history, dialog .ping-row").count())
+    throw Error(
+      "Detail latency must use independent line charts, not card bars",
+    );
+  if (!(await page.locator(".latency-line").count()))
+    throw Error("Real latency line paths are empty");
+  await page.locator(".latency-plot").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: resolve(output, "detail-latency.png") });
   await page.keyboard.press("Escape");
   let adminReachable = null;
   if (process.env.MINT_SMOKE_CREDENTIALS) {
@@ -121,6 +131,8 @@ try {
     realMetrics: true,
     realPingHistory: true,
     realResourceHistory: true,
+    realLatencyLines: true,
+    cpuGuidance: true,
     detail: true,
     adminReachable,
     panelRoutes,

@@ -58,11 +58,18 @@ export async function loadOverview() {
     tasks,
   };
 }
-export async function loadPings(uuid: string): Promise<PingRecord[]> {
-  const result = await rpc<{ records: PingRecord[] }>("public:getPingRecords", {
-    uuid,
-    hours: "1",
-  });
+export async function loadPings(
+  uuid: string,
+  signal?: AbortSignal,
+): Promise<PingRecord[]> {
+  const result = await rpc<{ records: PingRecord[] }>(
+    "public:getPingRecords",
+    {
+      uuid,
+      hours: "1",
+    },
+    signal,
+  );
   return result.records || [];
 }
 export async function loadExtension(uuid: string): Promise<Extension | null> {

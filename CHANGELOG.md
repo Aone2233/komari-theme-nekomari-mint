@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0 - 2026-10-17
+
+- Add sourced CPU specification guidance and qualitative workload ranges, distinguishing architecture-only identification, host specifications and allocated logical CPUs.
+- Keep unverified/OEM CPUs unclassified rather than inventing benchmarks, host SKUs or official performance rankings.
+- Replace detail latency bars with independent, lazy-loaded multi-series line charts inspired by SAO; retain homepage card bars.
+- Add per-series toggles, pointer/keyboard/touch sample inspection, failed-probe markers, gap preservation, statistics and cancellable minute refreshes.
+- Preserve protocol/family separation, zero-latency success, reference exclusion, official API compatibility and private-session handling.
+
 ## 0.4.0 - 2026-10-17
 
 - Add per-node CNY premiums/discounts, explicit acquisition dates and fixed amortization periods.

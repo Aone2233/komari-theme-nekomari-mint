@@ -18,6 +18,14 @@
   --shadow: 0 3px 10px #253a2903, 0 15px 40px #253a2903;
   --red: #c66b65;
   --yellow: #c8aa53;
+  --ping-0: #287653;
+  --ping-1: #5186a8;
+  --ping-2: #a9764e;
+  --ping-3: #9a9d56;
+  --ping-4: #ba6376;
+  --ping-5: #428e91;
+  --ping-6: #b38a38;
+  --ping-7: #6c7cb0;
 }
 * {
   box-sizing: border-box;
@@ -1217,15 +1225,6 @@ footer a {
   font-weight: 400;
   margin-left: 6px;
 }
-.detail-lines .ping-row {
-  grid-template-columns: 90px 60px 1fr 45px;
-}
-.detail-lines p {
-  font-size: 10px;
-  color: var(--muted);
-  line-height: 1.8;
-  margin: 8px 0 14px;
-}
 .evidence > div {
   display: grid;
   grid-template-columns: 75px 70px 1fr;
@@ -1756,15 +1755,6 @@ footer a {
   .evidence > div {
     grid-template-columns: 65px 60px 1fr;
   }
-  .detail-lines .ping-row {
-    grid-template-columns: 70px 50px minmax(40px, 1fr) 35px;
-  }
-  .detail-lines .carrier {
-    font-size: 11px;
-  }
-  .detail-lines .history {
-    gap: 2px;
-  }
   .help-panel {
     padding: 21px;
   }
@@ -1953,6 +1943,270 @@ footer a {
 }
 .node-grid.list-view {
   grid-template-columns: 1fr;
+}
+.cpu-insight {
+  margin: 12px 0;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--green);
+  border-radius: 10px;
+  background: linear-gradient(115deg, var(--soft), var(--paper));
+  overflow-wrap: anywhere;
+}
+.cpu-insight-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.cpu-basis {
+  color: var(--green);
+  font-size: 10px;
+}
+.detail .cpu-insight h3 {
+  margin: 12px 0 8px;
+  font-size: 16px;
+}
+.cpu-insight p {
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 8px 0;
+}
+.cpu-specs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cpu-specs span {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--paper);
+  font-size: 11px;
+}
+.cpu-insight .cpu-caution,
+.cpu-insight .cpu-disclaimer {
+  color: var(--muted);
+  font-size: 11px;
+}
+.cpu-insight .cpu-disclaimer {
+  margin-top: 8px;
+}
+.cpu-limits {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+.cpu-limits summary {
+  cursor: pointer;
+}
+.cpu-insight a {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--green);
+  font-size: 11px;
+  text-underline-offset: 3px;
+}
+.latency-history {
+  min-width: 0;
+}
+.latency-refresh {
+  background: var(--paper);
+  color: var(--ink);
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.latency-refresh:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.latency-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0 18px;
+}
+.latency-legend button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  text-align: left;
+  padding: 9px 10px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-bottom: 2px solid var(--series-color);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.latency-legend button[aria-pressed="false"] {
+  opacity: 0.45;
+  border-bottom-color: var(--border);
+}
+.latency-legend button > span {
+  min-width: 0;
+}
+.latency-legend b {
+  display: block;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.latency-legend small {
+  display: block;
+  color: var(--muted);
+  font-size: 9px;
+  margin-top: 4px;
+}
+.latency-legend-value {
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 11px;
+  text-align: right;
+}
+.latency-legend i,
+.latency-readout i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--series-color);
+  flex: 0 0 7px;
+}
+.latency-plot {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr);
+  gap: 6px;
+  padding: 14px 12px 12px 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--paper);
+}
+.latency-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 220px;
+  padding: 12px 4px 4px 0;
+  color: var(--muted);
+  text-align: right;
+  font-size: 9px;
+}
+.latency-canvas {
+  min-width: 0;
+}
+.latency-canvas svg {
+  display: block;
+  width: 100%;
+  height: 220px;
+  touch-action: pan-y;
+}
+.latency-line {
+  stroke: currentColor;
+  stroke-width: 1.7;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+}
+.latency-failures {
+  stroke: currentColor;
+  stroke-width: 1.3;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.8;
+}
+.latency-cursor {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+.latency-canvas .chart-times {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 9px;
+  margin: 8px 0;
+  gap: 4px;
+}
+.latency-scrubber {
+  grid-column: 1 / -1;
+  margin: 12px 6px 0;
+  font-size: 10px;
+  color: var(--muted);
+}
+.latency-scrubber input {
+  display: block;
+  width: 100%;
+  margin: 7px 0;
+  accent-color: var(--green);
+}
+.latency-readout {
+  grid-column: 1 / -1;
+  padding: 8px;
+  background: var(--bg);
+  border-radius: 6px;
+  font-size: 10px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.latency-readout time {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+.latency-readout > span {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.latency-readout small {
+  color: var(--muted);
+}
+.latency-stats {
+  font-size: 11px;
+  margin: 14px 0;
+}
+.latency-stats summary {
+  cursor: pointer;
+  padding: 6px 0;
+}
+.latency-stats p {
+  color: var(--muted);
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+[data-theme="dark"] .latency-history {
+  --ping-0: #79c89e;
+  --ping-1: #81b6d3;
+  --ping-2: #d4a07a;
+  --ping-3: #b8bf77;
+  --ping-4: #df8d9c;
+  --ping-5: #7bc4c7;
+  --ping-6: #d5b86c;
+  --ping-7: #a5b1eb;
+}
+@media (max-width: 520px) {
+  .latency-legend {
+    grid-template-columns: 1fr;
+  }
+  .latency-axis,
+  .latency-canvas svg {
+    height: 180px;
+  }
+  .latency-plot {
+    grid-template-columns: 42px minmax(0, 1fr);
+    padding-right: 8px;
+  }
+  .latency-canvas .chart-times span:nth-child(2) {
+    display: none;
+  }
 }
 .list-view .node-card {
   display: grid;

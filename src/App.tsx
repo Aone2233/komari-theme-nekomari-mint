@@ -68,7 +68,9 @@ import {
   extensionMessage,
   healthyConnections,
 } from "./enhancements";
+import CpuInsight from "./CpuInsight";
 const History = lazy(() => import("./History"));
+const LatencyHistory = lazy(() => import("./LatencyHistory"));
 const CostPanel = lazy(() => import("./CostPanel"));
 
 const services = [
@@ -610,7 +612,6 @@ function Detail({
       document.body.style.overflow = prev;
     };
   }, []);
-  const series = pingSeries(records, tasks, node.uuid, settings);
   return (
     <dialog
       ref={dialog}
@@ -641,7 +642,7 @@ function Detail({
           <span>处理器</span>
           <b>{node.cpu_name || "尚未上报"}</b>
           <small>
-            {node.cpu_cores || "—"} 核 · {node.arch || "—"}
+            {node.cpu_cores || "—"} 逻辑 CPU · {node.arch || "—"}
           </small>
         </div>
         <div>
@@ -655,6 +656,7 @@ function Detail({
           </small>
         </div>
       </div>
+      <CpuInsight name={node.cpu_name} />
       {node.public_remark && (
         <p className="public-remark">{node.public_remark}</p>
       )}
@@ -666,28 +668,14 @@ function Detail({
       <Suspense fallback={<p>正在载入历史图表…</p>}>
         <History uuid={node.uuid} />
       </Suspense>
-      <h3>
-        线路观测 <small>近 1 小时</small>
-      </h3>
-      <div className="detail-lines">
-        {series.length ? (
-          series.map((s) => (
-            <div key={s.key}>
-              <PingLine name={s.name} series={s} />
-              <p>
-                协议 {s.protocol.toUpperCase()} · 地址族{" "}
-                {s.family?.toUpperCase() || "未知"} · 样本 {s.total} · 失败{" "}
-                {s.failures} · 中位 {s.median?.toFixed(0) ?? "—"} ms · 抖动 MAD{" "}
-                {s.jitter?.toFixed(0) ?? "—"} ms
-              </p>
-            </div>
-          ))
-        ) : (
-          <p className="empty-note">
-            暂无历史。请在后台添加延迟监测任务，并分配给此节点。
-          </p>
-        )}
-      </div>
+      <Suspense fallback={<p>正在载入线路图表…</p>}>
+        <LatencyHistory
+          uuid={node.uuid}
+          initialRecords={records}
+          tasks={tasks}
+          settings={settings}
+        />
+      </Suspense>
       <h3>回程证据</h3>
       <p className="empty-note">
         {extension?.routes
@@ -1334,7 +1322,7 @@ export function App() {
         <footer>
           <span className="footer-brand">
             <Leaf size={15} />
-            Nekomari Mint <span>v0.4.0</span>
+            Nekomari Mint <span>v0.5.0</span>
           </span>
           <p>
             {String(
