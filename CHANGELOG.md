@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 - 2026-10-17
+
+- Honor minute-aligned legacy ping history rollups when a task is configured below one minute; keep failed probes and long gaps disconnected.
+- Verify real isolated history produces connected line segments rather than only isolated sample dots.
+
 ## 0.5.0 - 2026-10-17
 
 - Add sourced CPU specification guidance and qualitative workload ranges, distinguishing architecture-only identification, host specifications and allocated logical CPUs.

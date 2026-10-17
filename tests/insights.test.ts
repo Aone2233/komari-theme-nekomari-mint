@@ -71,3 +71,26 @@ test("latency paths break on packet loss and missing intervals without dropping 
     0,
   );
 });
+
+test("minute-aligned history rollups do not look like sub-minute outages", () => {
+  const records = [0, 60000, 120000, 600000].map((time) => ({
+    task_id: 1,
+    time: new Date(time).toISOString(),
+    value: 10,
+  }));
+  assert.equal(pingGapMs(15, records), 150000);
+  assert.equal(
+    chartSegments(records, 0, 700000, 20, pingGapMs(15, records)).length,
+    2,
+  );
+  assert.equal(
+    pingGapMs(
+      15,
+      records.map((r) => ({
+        ...r,
+        time: new Date(Date.parse(r.time) + 1000).toISOString(),
+      })),
+    ),
+    37500,
+  );
+});

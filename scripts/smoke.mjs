@@ -98,6 +98,13 @@ try {
     );
   if (!(await page.locator(".latency-line").count()))
     throw Error("Real latency line paths are empty");
+  const linePaths = await page
+    .locator(".latency-line")
+    .evaluateAll((paths) => paths.map((p) => p.getAttribute("d") || ""));
+  if (!linePaths.some((d) => (d.match(/L/g) || []).length >= 3))
+    throw Error(
+      "Real latency charts contain only isolated dots; check history aggregation cadence",
+    );
   await page.locator(".latency-plot").scrollIntoViewIfNeeded();
   await page.screenshot({ path: resolve(output, "detail-latency.png") });
   await page.keyboard.press("Escape");

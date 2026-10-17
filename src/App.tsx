@@ -1322,7 +1322,7 @@ export function App() {
         <footer>
           <span className="footer-brand">
             <Leaf size={15} />
-            Nekomari Mint <span>v0.5.0</span>
+            Nekomari Mint <span>v0.5.1</span>
           </span>
           <p>
             {String(

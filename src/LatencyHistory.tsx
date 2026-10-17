@@ -79,6 +79,7 @@ export default function LatencyHistory({
         dash: i < 8 ? undefined : "5 3",
         gap: pingGapMs(
           tasks.find((t) => t.id === row.records[0].task_id)?.interval,
+          row.records,
         ),
       })),
     [snapshot, tasks, uuid, settings],
