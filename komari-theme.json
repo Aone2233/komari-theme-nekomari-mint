@@ -1,10 +1,7 @@
 {
   "name": "Nekomari Mint",
   "short": "nekomari-mint",
-  "description": {
-    "zh-CN": "薄荷绿线路监控主题：真实延迟、丢包、资源与账单，支持 Nekomari 扩展。",
-    "en": "A mint-green monitoring theme with real latency, packet loss, resources and billing. Optional Nekomari extensions."
-  },
+  "description": "薄荷绿线路监控主题：真实延迟、丢包、资源与账单，支持 Nekomari 扩展。",
   "version": "0.1.0",
   "author": "Aone2233",
   "url": "https://github.com/Aone2233/komari-theme-nekomari-mint",

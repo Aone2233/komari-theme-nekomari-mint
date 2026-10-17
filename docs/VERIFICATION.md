@@ -21,6 +21,8 @@
   搜索 / 筛选 / 详情、官方降级，以及 320 / 390 / 768 / 1440px 无横向溢出）。
 - 主题：TypeScript / Vite 构建、ZIP 结构 / 清单版本 / 测试夹具排除、重复打包哈希一致，
   `npm audit --omit=dev` 无已知运行时依赖漏洞。
+- 商店：直接调用官方 `theme_submission.py` 校验主题 ZIP 和预览图。描述使用商店当前
+  接受的字符串格式，而非主题文档允许但提交脚本尚未接受的多语言对象。
 - Nekomari：服务端 Go 全套测试通过，排除仓库既有的三项外部 IP 服务测试
   `TestIpInfo` / `TestIpApi` / `TestGeojs`；Agent 测试通过，排除外部连通性测试
   `TestICMPPing` / `TestTCPPing` / `TestHTTPPing`。
