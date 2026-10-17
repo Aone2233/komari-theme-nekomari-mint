@@ -1,0 +1,69 @@
+name: Theme Checks And Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - run: npm run test:browser
+      - run: npm run package
+      - name: Verify deterministic ZIP and tag version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          cp releases/SHA256SUMS.txt /tmp/first-sha.txt
+          python3 scripts/package.py
+          cmp /tmp/first-sha.txt releases/SHA256SUMS.txt
+          (cd releases && sha256sum -c SHA256SUMS.txt)
+          python3 scripts/verify-package.py
+          if [ "$REF_TYPE" = tag ]; then
+            test "$REF_NAME" = "v$(node -p 'JSON.parse(require("fs").readFileSync("komari-theme.json")).version')"
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nekomari-mint
+          path: releases/*
+          if-no-files-found: error
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: nekomari-mint
+          path: releases
+      - name: Publish verified theme
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" releases/nekomari-mint.zip releases/SHA256SUMS.txt \
+            --verify-tag --title "Nekomari Mint $TAG" \
+            --notes "Import nekomari-mint.zip through the Komari/Nekomari theme page. Source archives are not install packages. Optional Nekomari extensions degrade gracefully on official Komari; see README for tested versions and data limitations. Preview images contain labeled demo data."

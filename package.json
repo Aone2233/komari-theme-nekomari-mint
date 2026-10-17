@@ -1,0 +1,33 @@
+{
+  "name": "komari-theme-nekomari-mint",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:browser": "playwright test",
+    "screenshots": "MINT_UPDATE_SCREENSHOTS=1 playwright test -g 'generate labeled preview'",
+    "format": "prettier --write src tests scripts/*.mjs *.json *.ts *.md docs/*.md .github/workflows/*.yml",
+    "package": "npm run build && python3 scripts/package.py"
+  },
+  "dependencies": {
+    "@fontsource-variable/manrope": "^5.2.8",
+    "lucide-react": "^0.577.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^22.19.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "prettier": "3.8.1",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.4.1"
+  }
+}

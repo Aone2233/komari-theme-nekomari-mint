@@ -1,0 +1,71 @@
+{
+  "name": "Nekomari Mint",
+  "short": "nekomari-mint",
+  "description": {
+    "zh-CN": "薄荷绿线路监控主题：真实延迟、丢包、资源与账单，支持 Nekomari 扩展。",
+    "en": "A mint-green monitoring theme with real latency, packet loss, resources and billing. Optional Nekomari extensions."
+  },
+  "version": "0.1.0",
+  "author": "Aone2233",
+  "url": "https://github.com/Aone2233/komari-theme-nekomari-mint",
+  "preview": "preview.png",
+  "configuration": {
+    "type": "managed",
+    "icon": "Leaf",
+    "name": "Mint 主题设置",
+    "data": [
+      { "type": "title", "name": "外观与数据" },
+      {
+        "key": "headline",
+        "type": "string",
+        "name": "首页标题",
+        "default": "每一条线路，都心中有数。"
+      },
+      {
+        "key": "subtitle",
+        "type": "string",
+        "name": "首页说明",
+        "default": "节点状态、线路质量与到期提醒，一眼看清。"
+      },
+      {
+        "key": "showExtensions",
+        "type": "switch",
+        "name": "显示 Nekomari 扩展检测",
+        "default": true,
+        "help": "官方 Komari 自动降级，不会把未检测状态显示为成功。"
+      },
+      {
+        "key": "telecomTasks",
+        "type": "pingtasks",
+        "name": "电信监测任务",
+        "default": "[]",
+        "help": "未指定时按任务名称识别；不自动创建远程探测。"
+      },
+      {
+        "key": "unicomTasks",
+        "type": "pingtasks",
+        "name": "联通监测任务",
+        "default": "[]"
+      },
+      {
+        "key": "mobileTasks",
+        "type": "pingtasks",
+        "name": "移动监测任务",
+        "default": "[]"
+      },
+      {
+        "key": "exchangeRates",
+        "type": "string",
+        "name": "人民币汇率 JSON",
+        "default": "{\"CNY\":1,\"RMB\":1,\"¥\":1}",
+        "help": "手动设置，如 {\"USD\":7.2,\"$\":7.2,\"EUR\":7.8}。无汇率不计入人民币合计，不猜测实时汇率。"
+      },
+      {
+        "key": "footer",
+        "type": "string",
+        "name": "页脚文字",
+        "default": "数据有据可查，状态不靠猜测。"
+      }
+    ]
+  }
+}
