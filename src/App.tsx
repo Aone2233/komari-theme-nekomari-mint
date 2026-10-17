@@ -20,13 +20,11 @@ import {
   ExternalLink,
   Leaf,
   LoaderCircle,
-  Moon,
   RefreshCw,
   Search,
   Server,
   ShieldCheck,
   SlidersHorizontal,
-  Sun,
   Wifi,
   X,
 } from "lucide-react";
@@ -73,6 +71,7 @@ import NetworkEvidence from "./NetworkEvidence";
 import { networkEvidence } from "./network";
 import { primaryPing } from "./primaryPing";
 import { failureLabel, MIN_PING_SAMPLES, qualifiedPingSeries } from "./latency";
+import ColorModeSwitch from "./ColorModeSwitch";
 type DetailSection = "overview" | "resources" | "latency" | "evidence";
 const detailSections = [
   ["overview", "概览"],
@@ -961,15 +960,12 @@ export function App() {
     [group, setGroup] = useState("all"),
     [onlyOnline, setOnlyOnline] = useState(false),
     [sort, setSort] = useState("weight");
-  const [dark, setDark] = useState(
-      () => localStorage.getItem("mint-dark") === "true",
-    ),
-    [detail, setDetail] = useState<{
-      node: NodeInfo;
-      records: PingRecord[];
-      ext: Extension | null;
-      section?: DetailSection;
-    } | null>(null);
+  const [detail, setDetail] = useState<{
+    node: NodeInfo;
+    records: PingRecord[];
+    ext: Extension | null;
+    section?: DetailSection;
+  } | null>(null);
   const [view, setView] = useState(
     () => localStorage.getItem("mint-view") || "cards",
   );
@@ -989,10 +985,6 @@ export function App() {
     const timer = setInterval(() => setClock(Date.now()), 5000);
     return () => clearInterval(timer);
   }, []);
-  useEffect(() => {
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-    localStorage.setItem("mint-dark", String(dark));
-  }, [dark]);
   const accessEpoch = useRef(0);
   const refresh = useCallback(async () => {
     const epoch = ++accessEpoch.current;
@@ -1141,13 +1133,7 @@ export function App() {
               <span>使用说明</span>
             </button>
             <span className="nav-divider" />
-            <button
-              className="icon-button"
-              onClick={() => setDark(!dark)}
-              aria-label={dark ? "切换浅色模式" : "切换深色模式"}
-            >
-              {dark ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
+            <ColorModeSwitch />
             <a className="admin-link" href="/admin">
               管理后台 <ArrowUpRight size={14} />
             </a>
@@ -1450,7 +1436,7 @@ export function App() {
         <footer>
           <span className="footer-brand">
             <Leaf size={15} />
-            Nekomari Mint <span>v0.7.0</span>
+            Nekomari Mint <span>v0.7.1</span>
           </span>
           <p>
             {String(

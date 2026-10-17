@@ -26,6 +26,7 @@
   --ping-5: #428e91;
   --ping-6: #b38a38;
   --ping-7: #6c7cb0;
+  color-scheme: light;
 }
 * {
   box-sizing: border-box;
@@ -172,6 +173,49 @@ nav .admin-link {
 }
 .icon-button:hover {
   background: var(--soft);
+}
+.color-mode-switch {
+  position: relative;
+}
+.color-mode-switch summary {
+  list-style: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.color-mode-switch summary::-webkit-details-marker {
+  display: none;
+}
+.color-mode-switch summary:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 4px;
+}
+.color-mode-options {
+  position: absolute;
+  z-index: 10;
+  right: 0;
+  top: calc(100% + 10px);
+  width: 156px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 12px 35px #0002;
+}
+.color-mode-options button {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  text-align: left;
+}
+.color-mode-options button[aria-pressed="true"],
+.color-mode-options button:hover {
+  color: var(--green);
+  background: var(--soft);
+}
+.color-mode-options button span {
+  flex: 1;
 }
 main {
   max-width: 1460px;
@@ -1506,6 +1550,7 @@ footer a {
   }
 }
 [data-theme="dark"] {
+  color-scheme: dark;
   --bg: #17201b;
   --paper: #202c24;
   --ink: #d5e2d5;

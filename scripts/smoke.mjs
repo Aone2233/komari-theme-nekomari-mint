@@ -232,6 +232,27 @@ try {
     path: resolve(output, "mobile.png"),
     fullPage: true,
   });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.waitForFunction(
+    () => document.documentElement.dataset.theme === "dark",
+  );
+  await page.getByLabel("外观模式：跟随系统", { exact: true }).click();
+  await page.getByRole("button", { name: "浅色", exact: true }).click();
+  await page.reload();
+  await page.waitForFunction(
+    () =>
+      document.documentElement.dataset.colorMode === "light" &&
+      document.documentElement.dataset.theme === "light",
+  );
+  await page.getByLabel("外观模式：浅色", { exact: true }).click();
+  await page.getByRole("button", { name: "跟随系统", exact: true }).click();
+  await page.waitForFunction(
+    () => document.documentElement.dataset.theme === "dark",
+  );
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.waitForFunction(
+    () => document.documentElement.dataset.theme === "light",
+  );
   if (errors.length) throw Error("Browser page errors: " + errors.join("; "));
   const result = {
     origin,
@@ -250,6 +271,8 @@ try {
     detail: true,
     adminReachable,
     panelRoutes,
+    systemAppearanceLive: true,
+    manualAppearancePersisted: true,
     pageErrors: errors,
   };
   await writeFile(

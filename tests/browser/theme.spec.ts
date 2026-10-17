@@ -451,7 +451,8 @@ test("desktop: real data states, search, grouping, details and dark mode", async
   await expect(page.locator("dialog")).toContainText("总分 =");
   await page.keyboard.press("Escape");
   await expect(page.locator("dialog")).toHaveCount(0);
-  await page.getByLabel("切换深色模式").click();
+  await page.getByLabel(/^外观模式：/).click();
+  await page.getByRole("button", { name: "深色", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   expect(errors).toEqual([]);
 });
@@ -542,7 +543,8 @@ test("generate labeled preview screenshots", async ({ page }, testInfo) => {
   await page.screenshot({ path: output("preview.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 1520 });
   await page.screenshot({ path: output("docs/mobile.png"), fullPage: false });
-  await page.getByLabel("切换深色模式").click();
+  await page.getByLabel(/^外观模式：/).click();
+  await page.getByRole("button", { name: "深色", exact: true }).click();
   await page.setViewportSize({ width: 1440, height: 1170 });
   await page.screenshot({ path: output("docs/dark.png"), fullPage: true });
 });
@@ -707,9 +709,8 @@ test("detail shows sourced CPU guidance and interactive latency lines, never car
     dialog.getByText("已隐藏全部线路，点击图例恢复显示。"),
   ).toBeVisible();
   await dialog.locator(".latency-legend button").first().click();
-  await page
-    .getByLabel("切换深色模式")
-    .evaluate((button: HTMLButtonElement) => button.click());
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   for (const width of [1440, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     expect(
@@ -1503,4 +1504,173 @@ test("a cancelled custom response cannot replace a newer preset or reappear afte
   await expect(page.getByRole("alert")).toContainText("近 6 小时更新失败");
   await expect(page.locator(".latency-plot")).toHaveCount(0);
   await expect(page.locator(".latency-legend")).toHaveCount(0);
+});
+
+test("appearance defaults to the OS and responds live without turning system into a saved override", async ({
+  page,
+}) => {
+  await fixture(page);
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-color-mode",
+    "system",
+  );
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  expect(
+    await page
+      .locator("html")
+      .evaluate((el) => getComputedStyle(el).colorScheme),
+  ).toBe("dark");
+  expect(
+    await page.evaluate(() => localStorage.getItem("mint-color-mode")),
+  ).toBe(null);
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.reload();
+  await expect(
+    page.getByLabel("外观模式：跟随系统", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+});
+
+test("manual appearance survives reload and system changes, and can return to following OS", async ({
+  page,
+}) => {
+  await fixture(page);
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+  const choose = async (name: string) => {
+    await page.getByLabel(/^外观模式：/).click();
+    await page.getByRole("button", { name, exact: true }).click();
+  };
+  await choose("浅色");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  expect(
+    await page.evaluate(() => localStorage.getItem("mint-color-mode")),
+  ).toBe("light");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-color-mode",
+    "light",
+  );
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await choose("深色");
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await choose("跟随系统");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-color-mode",
+    "system",
+  );
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+});
+
+test("legacy light auto-save no longer blocks OS mode while legacy dark is preserved", async ({
+  page,
+}) => {
+  await fixture(page);
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+  await page.evaluate(() => localStorage.setItem("mint-dark", "false"));
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-color-mode",
+    "system",
+  );
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.evaluate(() => localStorage.setItem("mint-dark", "true"));
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-color-mode", "dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.getByLabel(/^外观模式：/).click();
+  await page.getByRole("button", { name: "跟随系统", exact: true }).click();
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-color-mode",
+    "system",
+  );
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+});
+
+test("initial document resolves OS appearance before the React module can run", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.route("**/src/main.tsx", (route) => route.abort());
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-color-mode",
+    "system",
+  );
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("#root")).toBeEmpty();
+});
+
+test("appearance picker works on private sites, keyboard and narrow screens, and synchronizes tabs", async ({
+  page,
+  context,
+}) => {
+  await fixture(page, "private");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+  await expect(page.locator(".km-restricted-login-dialog")).toBeVisible();
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const trigger = page.getByLabel(/^外观模式：/);
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("group", { name: "外观模式", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "跟随系统", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      await page.locator(".color-mode-options").evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return (
+          r.left >= 0 &&
+          r.right <= innerWidth &&
+          document.documentElement.scrollWidth <= innerWidth
+        );
+      }),
+    ).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(trigger).toBeFocused();
+    await expect(
+      page.getByRole("group", { name: "外观模式", exact: true }),
+    ).not.toBeVisible();
+  }
+  await page.getByLabel(/^外观模式：/).click();
+  await page.getByRole("heading", { name: "这是一个私有监控站点" }).click();
+  await expect(
+    page.getByRole("group", { name: "外观模式", exact: true }),
+  ).not.toBeVisible();
+  const other = await context.newPage();
+  await fixture(other, "private");
+  await other.goto("/");
+  await expect(other.getByLabel(/^外观模式：/)).toBeVisible();
+  await page.getByLabel(/^外观模式：/).click();
+  await page.getByRole("button", { name: "浅色", exact: true }).click();
+  await expect(other.locator("html")).toHaveAttribute(
+    "data-color-mode",
+    "light",
+  );
+  await expect(other.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.evaluate(() => localStorage.clear());
+  await expect(other.locator("html")).toHaveAttribute(
+    "data-color-mode",
+    "system",
+  );
+  await other.close();
 });

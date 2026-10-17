@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1 - 2026-10-17
+
+- Fix missing system appearance: default to the OS/browser color scheme and respond to live changes without a reload.
+- Add an explicit System / Light / Dark picker with persistent manual overrides, cross-tab updates and native control color schemes.
+- Resolve appearance before the application module loads; migrate legacy auto-saved light values to System while preserving legacy dark choices.
+- Keep private-site/Passkey login, node details, costs and all server/Agent settings unchanged.
+
 ## 0.7.0 - 2026-10-17
 
 - Organize node details into accessible Overview / Resources / Latency / Evidence tabs with a fixed header; open all-lines actions directly in Latency.
