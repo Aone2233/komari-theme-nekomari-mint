@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0 - 2026-10-17
+
+- Show exactly one primary latency line per homepage card, with per-node bindings and ordered task preferences; keep all detail line charts.
+- Select deterministically rather than by best latency/health; retain explicit failures, missing samples and full-scope scoring.
+- Add offline SAO import preparation for frozen premiums, acquisition metadata, exclusions and original primary task bindings without changing shared node prices.
+- Preserve and label SAO acquisition-to-expiry/holding amortization separately from fixed terms; retain acquisition price without double counting.
+- Record dated, same-day FX snapshots and preserve imported metadata through native settings editor round trips.
+
 ## 0.5.2 - 2026-10-17
 
 - Fix legacy unknown network summaries hiding explicit administrator home/education category tags; mark manual categories distinctly.

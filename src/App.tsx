@@ -71,6 +71,7 @@ import {
 import CpuInsight from "./CpuInsight";
 import NetworkEvidence from "./NetworkEvidence";
 import { networkEvidence } from "./network";
+import { primaryPing } from "./primaryPing";
 const History = lazy(() => import("./History"));
 const LatencyHistory = lazy(() => import("./LatencyHistory"));
 const CostPanel = lazy(() => import("./CostPanel"));
@@ -259,6 +260,7 @@ function NodeCard({
   }, [node.uuid, visible, index, settings?.showExtensions]);
   const isOnline = online(live);
   const series = pingSeries(records, tasks, node.uuid, settings);
+  const primary = primaryPing(node.uuid, tasks, series, settings);
   const failures = series.reduce((sum, s) => sum + s.failures, 0),
     total = series.reduce((sum, s) => sum + s.total, 0);
   const bill = traffic(live, node);
@@ -411,28 +413,25 @@ function NodeCard({
           近 1 小时 {total ? `失败 ${failures} / ${total}` : "暂无样本"}
         </span>
       </div>
-      <div className="ping-table">
+      <div className="ping-table primary-ping">
         <div className="ping-caption">
-          <span>三网延迟</span>
+          <span>主线路延迟</span>
           <span>近 1 小时 · 丢包</span>
         </div>
-        {(Object.keys(carriers) as (keyof typeof carriers)[]).map((carrier) => (
-          <PingLine
-            key={carrier}
-            name={carriers[carrier]}
-            series={
-              series.find(
-                (s) => s.carrier === carrier && s.protocol !== "icmp",
-              ) || series.find((s) => s.carrier === carrier)
-            }
-          />
-        ))}
-        {series
-          .filter((s) => !s.carrier)
-          .slice(0, 2)
-          .map((s) => (
-            <PingLine key={s.key} name={s.name} series={s} />
-          ))}
+        <PingLine
+          name={
+            primary.task?.name ||
+            (primary.missing ? "主线路未分配" : "暂无主线路")
+          }
+          series={primary.series}
+        />
+        <button
+          className="all-lines-button"
+          onClick={() => onOpen(node, records, extension)}
+        >
+          查看全部线路{series.length ? `（${series.length}）` : ""}{" "}
+          <ArrowUpRight size={12} />
+        </button>
       </div>
       <div className="routes">
         <span>回程</span>
@@ -1330,7 +1329,7 @@ export function App() {
         <footer>
           <span className="footer-brand">
             <Leaf size={15} />
-            Nekomari Mint <span>v0.5.2</span>
+            Nekomari Mint <span>v0.6.0</span>
           </span>
           <p>
             {String(

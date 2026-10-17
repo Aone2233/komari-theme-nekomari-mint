@@ -394,6 +394,7 @@ h1 {
   min-width: 0;
 }
 .cost-panel input:not([type="checkbox"]),
+.cost-panel select,
 .cost-panel textarea {
   width: 100%;
   min-width: 0;
@@ -457,6 +458,7 @@ h1 {
 }
 .cost-panel button:focus-visible,
 .cost-panel input:focus-visible,
+.cost-panel select:focus-visible,
 .cost-panel textarea:focus-visible,
 .cost-details-button:focus-visible {
   outline: 2px solid var(--green);
@@ -836,6 +838,21 @@ h1 {
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   padding: 12px 0 13px;
+}
+.primary-ping .ping-row {
+  grid-template-columns: minmax(65px, 1fr) 53px minmax(70px, 1.8fr) 39px;
+}
+.all-lines-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 9px 0 0 auto;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--green);
+  font-size: 10px;
+  cursor: pointer;
 }
 .ping-caption {
   display: flex;

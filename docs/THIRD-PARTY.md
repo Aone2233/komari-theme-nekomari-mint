@@ -21,6 +21,10 @@ by [Komari-Theme-SAO](https://github.com/WAOR/Komari-Theme-SAO) (MIT), inspected
 `2b6a015d8be2efd6944336a98753bd86b0a47b3b` (see upstream for current code).
 Mint's calculation and managed-settings editor are independently implemented;
 SAO's source, UI assets and automatic acquisition-value algorithms are not bundled.
+An optional offline import preserves SAO's stored premium/acquisition values and
+per-node task bindings. An independently implemented, explicitly labeled SAO
+amortization mode follows its acquisition-to-expiry/holding-span semantics; it
+does not recompute the original acquisition premium or bundle SAO's FX client.
 
 The detail latency chart also references SAO's multi-series line-chart interaction
 at the same commit. Mint independently implements its SVG chart, gap handling,

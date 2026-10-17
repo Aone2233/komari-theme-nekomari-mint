@@ -1,6 +1,6 @@
 {
   "name": "komari-theme-nekomari-mint",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "test:browser": "playwright test",
     "screenshots": "MINT_UPDATE_SCREENSHOTS=1 playwright test -g 'generate labeled preview'",
-    "format": "prettier --write src tests scripts/*.mjs *.json *.ts *.md docs/*.md .github/workflows/*.yml",
+    "format": "prettier --write src tests scripts/*.{mjs,ts} *.json *.ts *.md docs/*.md .github/workflows/*.yml",
     "package": "npm run build && python3 scripts/package.py"
   },
   "dependencies": {

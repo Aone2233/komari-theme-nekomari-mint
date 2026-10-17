@@ -6,12 +6,16 @@ export const costSettingKeys = [
   "costIgnoredNodes",
   "costPremiums",
   "costIncludePremium",
+  "costRateSnapshot",
 ] as const;
 
 export interface Premium {
   amount: number;
   acquiredAt?: string;
   months?: number;
+  amortization?: "sao";
+  paidCny?: number;
+  acquiredOffsetMinutes?: number;
 }
 export interface CostDetail {
   uuid: string;
@@ -22,6 +26,7 @@ export interface CostDetail {
   note: string;
   premiumNote: string;
   ignored: boolean;
+  paidCny?: number;
 }
 
 function object(value: unknown): Record<string, unknown> | null {
@@ -59,6 +64,24 @@ export function premiumSettings(value: unknown) {
       continue;
     }
     const item: Premium = { amount: entry.amount };
+    if (entry.amortization !== undefined) {
+      if (entry.amortization === "sao") item.amortization = "sao";
+      else warnings.push("存在无效摊销模式，未使用");
+    }
+    if (entry.paidCny !== undefined) {
+      if (finite(entry.paidCny) && entry.paidCny >= 0)
+        item.paidCny = entry.paidCny;
+      else warnings.push("存在无效收购价，未使用");
+    }
+    if (entry.acquiredOffsetMinutes !== undefined) {
+      if (
+        finite(entry.acquiredOffsetMinutes) &&
+        Number.isInteger(entry.acquiredOffsetMinutes) &&
+        Math.abs(entry.acquiredOffsetMinutes) <= 840
+      )
+        item.acquiredOffsetMinutes = entry.acquiredOffsetMinutes;
+      else warnings.push("存在无效收购日期时区，未使用");
+    }
     if (entry.acquiredAt !== undefined) {
       if (acquisitionTime(entry.acquiredAt) === null)
         warnings.push("存在无效收购日期，未摊销");
@@ -196,10 +219,40 @@ export function monthlyTotal(
       : undefined;
     if (p) {
       d.premium = p.amount;
+      d.paidCny = p.paidCny;
       premium += p.amount;
-      const acquired = acquisitionTime(p.acquiredAt);
+      const day = acquisitionTime(p.acquiredAt);
+      const acquired =
+        day === null ? null : day - (p.acquiredOffsetMinutes || 0) * 60000;
       if (p.amount !== 0) {
-        if (acquired === null || !p.months) {
+        if (p.amortization === "sao") {
+          if (acquired === null || acquired > now) {
+            d.premiumNote =
+              acquired === null
+                ? "SAO 口径：缺收购日期，仅计一次性溢价"
+                : "尚未到收购日期";
+            pendingPremiums++;
+          } else {
+            const expiry = node.expired_at ? Date.parse(node.expired_at) : NaN;
+            const span =
+              Number.isFinite(expiry) &&
+              expiry > acquired &&
+              expiry - acquired < 100 * 365 * DAY
+                ? expiry - acquired
+                : now - acquired;
+            const months = Math.max(1, span / (30 * DAY));
+            const amount = p.amount / months;
+            if (Number.isFinite(amount)) {
+              d.premiumMonthly = amount;
+              premiumMonthly += amount;
+              amortized++;
+              d.premiumNote = `SAO 口径：${months.toFixed(2)} 个月（随到期日 / 持有时长变化）`;
+            } else {
+              d.premiumNote = "摊销数值超出范围，未计入";
+              pendingPremiums++;
+            }
+          }
+        } else if (acquired === null || !p.months) {
           d.premiumNote = "缺收购日期或摊销月数，仅计一次性溢价";
           pendingPremiums++;
         } else if (acquired > now) {

@@ -2,7 +2,7 @@
   "name": "Nekomari Mint",
   "short": "nekomari-mint",
   "description": "薄荷绿线路监控主题：真实延迟、丢包、资源与账单，支持 Nekomari 扩展。",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "author": "Aone2233",
   "url": "https://github.com/Aone2233/komari-theme-nekomari-mint",
   "preview": "preview.png",
@@ -35,6 +35,20 @@
         "help": "官方 Komari 自动降级，不会把未检测状态显示为成功。"
       },
       {
+        "key": "primaryPingTasks",
+        "type": "pingtasks",
+        "name": "卡片主线路优先任务",
+        "default": "[]",
+        "help": "每卡片仅一条。按所选任务顺序取已分配任务；每节点覆盖优先。未选时稳定按任务类型和 ID 选择，不按最低延迟挑选。全部线路保留在详情。"
+      },
+      {
+        "key": "primaryPingByNode",
+        "type": "richtext",
+        "name": "逐节点主线路 JSON",
+        "default": "{}",
+        "help": "按 UUID 指定任务 ID，如 {\"节点UUID\":3}。任务未分配或无样本时明确显示，不偷偷换成其他成功线路。可从原 SAO 绑定迁移。"
+      },
+      {
         "key": "telecomTasks",
         "type": "pingtasks",
         "name": "电信监测任务",
@@ -65,6 +79,13 @@
         "help": "例如 {\"USD\":7.2,\"EUR\":7.8}，表示 1 单位外币折合人民币。支持 USD/$、EUR/€ 等别名；人民币固定为 1。缺币种或汇率不计入，不请求实时外汇服务。"
       },
       {
+        "key": "costRateSnapshot",
+        "type": "string",
+        "name": "汇率快照说明",
+        "default": "",
+        "help": "记录静态汇率的来源与日期；修改汇率时请同步更新说明。不自动请求外部接口。"
+      },
+      {
         "key": "costIncludePremium",
         "type": "switch",
         "name": "月度支出包含溢价月摊",
@@ -83,7 +104,7 @@
         "type": "richtext",
         "name": "节点溢价 JSON",
         "default": "{}",
-        "help": "推荐在首页月度支出“明细”中以管理员身份可视化编辑。按 UUID 配置，例如 {\"节点UUID\":{\"amount\":120,\"acquiredAt\":\"2026-10-01\",\"months\":12}}。amount 为人民币额外溢价（不是总收购价），负数表示折价；日期和月数缺失时仅计一次性总额，不摊销。每月按 30 天、UTC 日期计算，期满停止，不随续费变化。设置公开，勿填写秘密。"
+        "help": "推荐在首页月度支出“明细”中以管理员身份可视化编辑。按 UUID 配置，例如 {\"节点UUID\":{\"amount\":120,\"acquiredAt\":\"2026-10-01\",\"months\":12}}。amount 为人民币额外溢价（不是总收购价），负数表示折价；日期和月数缺失时仅计一次性总额，不摊销。每月按 30 天、UTC 日期计算，期满停止，不随续费变化。设置公开，勿填写秘密。 从 SAO 导入可保留 paidCny，并设置 amortization:\"sao\"、acquiredOffsetMinutes:480，按原收购日到当前到期日（无有效到期则持有时长，最少一月）摊销，不再自动重算溢价。"
       },
       {
         "type": "title",

@@ -913,3 +913,113 @@ test("stale and official network summaries never use routes or virtualization as
   await expect(card.locator(".network-tag")).toHaveText("未分类");
   await expect(card.locator(".node-tags")).toContainText("9929");
 });
+
+test("one primary latency per card, all series remain in detail and explicit failure never switches tasks", async ({
+  page,
+}) => {
+  await fixture(page, "nekomari", {
+    settings: { primaryPingByNode: '{"node-0":2}' },
+  });
+  await page.goto("/");
+  const card = page.locator(".node-card").first();
+  await expect(card.locator(".ping-row")).toHaveCount(1);
+  await expect(card.locator(".ping-row")).toHaveAttribute("title", /联通 北京/);
+  await card.getByRole("button", { name: /查看全部线路/ }).click();
+  await expect(
+    page.getByRole("img", { name: /延迟折线图，3 条线路/ }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.route("**/api/rpc2", async (route) => {
+    const req = route.request().postDataJSON();
+    if (req.method !== "public:getPingRecords") return route.fallback();
+    await route.fulfill({
+      json: {
+        id: req.id,
+        jsonrpc: "2.0",
+        result: {
+          records: [
+            {
+              task_id: 2,
+              value: -1,
+              time: new Date(Date.now() - 1000).toISOString(),
+            },
+            {
+              task_id: 3,
+              value: 1,
+              time: new Date(Date.now() - 1000).toISOString(),
+            },
+          ],
+        },
+      },
+    });
+  });
+  await page.reload();
+  await expect(card.locator(".operator")).toHaveText("SoftBank");
+  await expect(card.locator(".ping-row")).toHaveCount(1);
+  await expect(card.locator(".latency b")).toHaveText("—");
+  await expect(card.locator(".ping-row")).toHaveAttribute("title", /联通 北京/);
+  await expect(card.locator(".loss")).toHaveText("100.0%");
+  await page.setViewportSize({ width: 320, height: 1000 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("SAO premiums keep paid price, dynamic mode and selected primary tasks on editor roundtrip", async ({
+  page,
+}) => {
+  const settings: Record<string, unknown> = {
+    costPremiums: JSON.stringify({
+      "node-0": {
+        amount: 120,
+        paidCny: 200,
+        acquiredAt: "2026-10-01",
+        amortization: "sao",
+        acquiredOffsetMinutes: 480,
+      },
+    }),
+    primaryPingByNode: '{"node-0":2}',
+    primaryPingTasks: [3, 1],
+    costRateSnapshot: "Frankfurter · 2026-10-17",
+    costIncludePremium: true,
+  };
+  await fixture(page, "nekomari", { settings, loggedIn: true });
+  let saved: Record<string, unknown> | undefined;
+  await page.route(
+    "**/api/admin/theme/settings?theme=nekomari-mint",
+    async (route) => {
+      saved = route.request().postDataJSON();
+      Object.assign(settings, saved);
+      await route.fulfill({ json: { status: "success" } });
+    },
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "显示费用", exact: true }).click();
+  await page.getByRole("button", { name: "费用与溢价设置" }).click();
+  await expect(page.locator(".cost-node").first()).toContainText(
+    "原收购价 ¥ 200.00",
+  );
+  await expect(page.locator(".cost-node").first()).toContainText("SAO 口径");
+  await expect(page.locator(".cost-panel")).toContainText(
+    "Frankfurter · 2026-10-17",
+  );
+  await page.getByRole("button", { name: "编辑费用设置" }).click();
+  await expect(page.getByLabel("vpsTaxi · 东京软银 摊销口径")).toHaveValue(
+    "sao",
+  );
+  await expect(page.getByLabel("vpsTaxi · 东京软银 摊销月数")).toBeDisabled();
+  await page.getByRole("button", { name: "保存费用设置" }).click();
+  await expect(page.getByRole("status")).toContainText("费用设置已保存");
+  expect(JSON.parse(saved?.costPremiums as string)["node-0"]).toEqual({
+    amount: 120,
+    paidCny: 200,
+    acquiredAt: "2026-10-01",
+    amortization: "sao",
+    acquiredOffsetMinutes: 480,
+  });
+  expect(JSON.parse(saved?.primaryPingTasks as string)).toEqual([3, 1]);
+  expect(saved?.primaryPingByNode).toBe('{"node-0":2}');
+  expect(saved?.costRateSnapshot).toBe("Frankfurter · 2026-10-17");
+});

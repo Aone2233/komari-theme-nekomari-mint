@@ -11,7 +11,12 @@ import {
 } from "./cost";
 import type { NodeInfo, Site } from "./types";
 
-type Draft = { amount: string; acquiredAt: string; months: string };
+type Draft = {
+  amount: string;
+  acquiredAt: string;
+  months: string;
+  mode: "fixed" | "sao";
+};
 const signature = (s: Site["theme_settings"]) =>
   JSON.stringify(costSettingKeys.map((key) => s?.[key]));
 
@@ -46,6 +51,7 @@ export default function CostPanel({
             amount: p ? String(p.amount) : "",
             acquiredAt: p?.acquiredAt || "",
             months: p?.months ? String(p.months) : "",
+            mode: p?.amortization === "sao" ? "sao" : "fixed",
           },
         ];
       }),
@@ -62,10 +68,28 @@ export default function CostPanel({
       ? initial.exchangeRates
       : JSON.stringify(initial?.exchangeRates || {}),
   );
+  const [rateNote, setRateNote] = useState(() =>
+    typeof initial?.costRateSnapshot === "string"
+      ? initial.costRateSnapshot
+      : "",
+  );
   const summary = monthlyTotal(nodes, settings);
   const money = (value: number | null) =>
     hideAmounts ? "••••" : value === null ? "—" : `¥ ${value.toFixed(2)}`;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = (uuid: string) =>
+    new Date(
+      Date.now() + (parsed.entries[uuid]?.acquiredOffsetMinutes || 0) * 60000,
+    )
+      .toISOString()
+      .slice(0, 10);
+  const dateZone = (uuid: string) => {
+    const offset = parsed.entries[uuid]?.acquiredOffsetMinutes || 0;
+    return offset === 480
+      ? "北京时间"
+      : offset === 0
+        ? "UTC"
+        : `UTC${offset > 0 ? "+" : ""}${offset / 60}`;
+  };
   useEffect(() => {
     dialog.current?.showModal();
     const previous = document.body.style.overflow;
@@ -122,10 +146,15 @@ export default function CostPanel({
         if (
           draft.acquiredAt &&
           (acquisitionTime(draft.acquiredAt) === null ||
-            draft.acquiredAt > today)
+            draft.acquiredAt > today(uuid))
         )
-          throw Error("收购日期须为有效日期，且不能晚于今天（UTC）。");
-        const months = draft.months.trim() ? Number(draft.months) : undefined;
+          throw Error(
+            `收购日期须为有效日期，且不能晚于今天（${dateZone(uuid)}）。`,
+          );
+        const months =
+          draft.mode === "fixed" && draft.months.trim()
+            ? Number(draft.months)
+            : undefined;
         if (
           months !== undefined &&
           (!Number.isFinite(months) ||
@@ -133,10 +162,21 @@ export default function CostPanel({
             !Number.isFinite(amount / months))
         )
           throw Error("摊销月数须大于 0，且月摊金额不能超出范围。");
+        const previous = parsed.entries[uuid];
         premiums[uuid] = {
           amount,
+          ...(previous?.paidCny !== undefined
+            ? { paidCny: previous.paidCny }
+            : {}),
+          ...(previous?.acquiredOffsetMinutes !== undefined
+            ? { acquiredOffsetMinutes: previous.acquiredOffsetMinutes }
+            : {}),
           ...(draft.acquiredAt ? { acquiredAt: draft.acquiredAt } : {}),
-          ...(months !== undefined ? { months } : {}),
+          ...(draft.mode === "sao"
+            ? { amortization: "sao" }
+            : months !== undefined
+              ? { months }
+              : {}),
         };
       }
       // The standard host API replaces all theme settings. Merge a fresh snapshot
@@ -159,7 +199,7 @@ export default function CostPanel({
             ...latest.theme_settings,
             // Managed selectors are arrays on reads but JSON-array text on writes.
             ...Object.fromEntries(
-              ["telecomTasks", "unicomTasks", "mobileTasks"]
+              ["telecomTasks", "unicomTasks", "mobileTasks", "primaryPingTasks"]
                 .filter((key) => Array.isArray(latest.theme_settings?.[key]))
                 .map((key) => [
                   key,
@@ -167,6 +207,7 @@ export default function CostPanel({
                 ]),
             ),
             exchangeRates: JSON.stringify(rateObject),
+            costRateSnapshot: rateNote,
             costIgnoredNodes: JSON.stringify(ignored),
             costPremiums: JSON.stringify(premiums),
             costIncludePremium: includePremium,
@@ -219,8 +260,16 @@ export default function CostPanel({
         </button>
       </div>
       <p className="cost-explainer">
-        续费月费与一次性收购溢价分开统计。溢价按指定月数摊销，不会全额重复计入每个月；正数为溢价，负数为折价。
+        续费月费与一次性收购溢价分开统计，不会把整笔收购价再次算作溢价。默认按固定月数摊销；从
+        SAO 导入的记录保留其到期日 / 持有时长口径，并逐条标注。 SAO
+        月摊是成本分摊估算，不是本月扣款；沿用原口径，到期后也不会自动归零。
       </p>
+      {typeof settings?.costRateSnapshot === "string" &&
+        settings.costRateSnapshot && (
+          <p className="cost-explainer">
+            汇率快照：{settings.costRateSnapshot}。不自动刷新，可在此编辑汇率。
+          </p>
+        )}
       <div className="cost-totals">
         <div>
           <small>续费月费</small>
@@ -282,7 +331,10 @@ export default function CostPanel({
               aria-label="人民币汇率 JSON"
               rows={3}
               value={rates}
-              onChange={(e) => setRates(e.target.value)}
+              onChange={(e) => {
+                setRates(e.target.value);
+                setRateNote(`手动更新 ${new Date().toISOString()}`);
+              }}
               spellCheck={false}
             />
           </label>
@@ -292,8 +344,10 @@ export default function CostPanel({
           </p>
           <p className="cost-explainer">
             请填写“额外支付的溢价”，不是完整收购价。摊销按每月 30 天、自收购日期
-            UTC
-            零时开始，期满停止；留空日期或月数只记录总额，不猜测摊销周期。续费不自动延长摊销。
+            UTC 零时开始，期满停止；SAO
+            导入记录保留已记录的日期时区与动态摊销口径。
+            留空日期只记录总额；固定模式还需月数。切换模式前请确认口径，续费会影响
+            SAO 月摊，但不会延长固定摊销。
           </p>
         </div>
       )}
@@ -332,10 +386,11 @@ export default function CostPanel({
                   />
                 </label>
                 <label>
-                  收购日期（UTC）
+                  收购日期
+                  {`（${dateZone(d.uuid)}）`}
                   <input
                     type="date"
-                    max={today}
+                    max={today(d.uuid)}
                     value={drafts[d.uuid]?.acquiredAt || ""}
                     onChange={(e) =>
                       patch(d.uuid, "acquiredAt", e.target.value)
@@ -344,11 +399,23 @@ export default function CostPanel({
                   />
                 </label>
                 <label>
+                  摊销口径
+                  <select
+                    aria-label={`${d.name} 摊销口径`}
+                    value={drafts[d.uuid]?.mode || "fixed"}
+                    onChange={(e) => patch(d.uuid, "mode", e.target.value)}
+                  >
+                    <option value="fixed">固定月数（期满停止）</option>
+                    <option value="sao">SAO（随到期 / 持有时长）</option>
+                  </select>
+                </label>
+                <label>
                   摊销月数
                   <input
                     type="number"
                     step="any"
                     min="0.01"
+                    disabled={drafts[d.uuid]?.mode === "sao"}
                     value={drafts[d.uuid]?.months || ""}
                     onChange={(e) => patch(d.uuid, "months", e.target.value)}
                     aria-label={`${d.name} 摊销月数`}
@@ -359,7 +426,12 @@ export default function CostPanel({
                   onClick={() =>
                     setDrafts((current) => ({
                       ...current,
-                      [d.uuid]: { amount: "", acquiredAt: "", months: "" },
+                      [d.uuid]: {
+                        amount: "",
+                        acquiredAt: "",
+                        months: "",
+                        mode: "fixed",
+                      },
                     }))
                   }
                 >
@@ -370,6 +442,9 @@ export default function CostPanel({
               <p className="cost-node-values">
                 续费 {money(d.monthly)} / 月 · 一次性溢价 {money(d.premium)} ·
                 当前月摊 {money(d.premiumMonthly)}
+                {d.paidCny !== undefined
+                  ? ` · 原收购价 ${money(d.paidCny)}`
+                  : ""}
                 {d.premiumNote ? ` · ${d.premiumNote}` : ""}
               </p>
             )}

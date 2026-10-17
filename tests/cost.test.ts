@@ -225,3 +225,64 @@ test("invalid premium dates and periods never create active monthly costs", () =
     assert.ok(r.warnings.length);
   }
 });
+
+test("SAO import preserves frozen premium, paid price, Shanghai acquisition time and dynamic amortization", () => {
+  const premium = {
+    amount: 120,
+    paidCny: 200,
+    acquiredAt: "2026-10-01",
+    amortization: "sao",
+    acquiredOffsetMinutes: 480,
+  };
+  const acquired = Date.parse("2026-09-30T16:00:00Z");
+  const expiry = new Date(acquired + 60 * 86400000).toISOString();
+  const s = settings(premium);
+  const result = monthlyTotal([node({ expired_at: expiry })], s, now);
+  assert.equal(result.premium, 120);
+  assert.equal(result.details[0].paidCny, 200);
+  assert.equal(result.premiumMonthly, 60);
+  assert.match(result.details[0].premiumNote, /SAO/);
+  assert.equal(
+    monthlyTotal(
+      [node({ expired_at: new Date(acquired + 120 * 86400000).toISOString() })],
+      s,
+      now,
+    ).premiumMonthly,
+    30,
+  );
+  // SAO keeps its reference monthly figure after a finite expiry, unlike fixed mode.
+  assert.equal(
+    monthlyTotal([node({ expired_at: expiry })], s, Date.parse(expiry) + 1)
+      .premiumMonthly,
+    60,
+  );
+  assert.equal(monthlyTotal([node()], s, acquired - 1).premiumMonthly, 0);
+  assert.equal(monthlyTotal([node()], s, acquired).premiumMonthly, 120);
+  assert.equal(
+    monthlyTotal([node()], s, acquired + 90 * 86400000).premiumMonthly,
+    40,
+  );
+  assert.equal(
+    monthlyTotal(
+      [node({ expired_at: "2226-01-01" })],
+      s,
+      acquired + 90 * 86400000,
+    ).premiumMonthly,
+    40,
+  );
+  const parsed = premiumSettings(JSON.stringify({ one: premium }));
+  assert.deepEqual(parsed.entries.one, premium);
+  assert.equal(parsed.warnings.length, 0);
+});
+test("invalid SAO metadata is reported instead of silently discarding import provenance", () => {
+  const result = premiumSettings({
+    one: {
+      amount: 10,
+      amortization: "other",
+      paidCny: -1,
+      acquiredOffsetMinutes: 9999,
+    },
+  });
+  assert.equal(result.entries.one.amount, 10);
+  assert.equal(result.warnings.length, 3);
+});

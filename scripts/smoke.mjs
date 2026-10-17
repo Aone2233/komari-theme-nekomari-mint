@@ -56,6 +56,14 @@ try {
   }
   await page.goto(origin);
   await page.waitForSelector(".node-card", { timeout: 60000 });
+  if (
+    !(await page
+      .locator(".node-card")
+      .evaluateAll((cards) =>
+        cards.every((card) => card.querySelectorAll(".ping-row").length === 1),
+      ))
+  )
+    throw Error("Each card must show exactly one primary latency row");
   await page.waitForFunction(
     () => document.querySelector(".metric b")?.textContent !== "—",
   );
@@ -140,6 +148,7 @@ try {
     realPingHistory: true,
     realResourceHistory: true,
     realLatencyLines: true,
+    onePrimaryLinePerCard: true,
     cpuGuidance: true,
     detail: true,
     adminReachable,
