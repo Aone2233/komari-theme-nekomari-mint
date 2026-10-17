@@ -31,3 +31,12 @@ at the same commit. Mint independently implements its SVG chart, gap handling,
 sample inspection and legend without copying SAO code or bundling uPlot.
 CPU facts and source links are documented in `CPU-GUIDE.md`; capability labels are
 Mint's qualitative interpretation, not vendor ratings or benchmark results.
+
+The tabbed detail organization, quick/custom latency ranges, all/none controls and
+minimum-sample presentation are also inspired by
+[komari-theme-transit](https://github.com/yyy622hhh/komari-theme-transit), MIT,
+inspected at `ee9f31c5ff104e033ded858171ce0b63c672e878` (v1.4.5).
+Upstream notices credit 2026 yyy622hhh and 2025 Tony Liu. Mint independently
+implements these interactions in React/SVG; no Transit source or assets are
+bundled. Its interpolation, peak trimming, task-only merging and topology are
+not adopted: Mint retains real gaps, failures, peaks and protocol/family series.

@@ -51,37 +51,44 @@ async function fetchHistory(
     }));
   }
 }
-export default function History({ uuid }: { uuid: string }) {
+export default function History({
+  uuid,
+  active = true,
+}: {
+  uuid: string;
+  active?: boolean;
+}) {
   const [hours, setHours] = useState(1),
     [series, setSeries] = useState<Series[]>([]),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(true);
   useEffect(() => {
+    if (!active) return;
     const controller = new AbortController();
-    let active = true;
+    let alive = true;
     setBusy(true);
     setError("");
     setSeries([]);
     const timer = setTimeout(() => controller.abort(), 20000);
     fetchHistory(uuid, hours, controller.signal)
       .then((result) => {
-        if (active) setSeries(result);
+        if (alive) setSeries(result);
       })
       .catch((e) => {
-        if (!active) return;
+        if (!alive) return;
         if (!controller.signal.aborted) setError(e.message || "读取失败");
         else setError("读取超时");
       })
       .finally(() => {
         clearTimeout(timer);
-        if (active) setBusy(false);
+        if (alive) setBusy(false);
       });
     return () => {
-      active = false;
+      alive = false;
       clearTimeout(timer);
       controller.abort();
     };
-  }, [uuid, hours]);
+  }, [uuid, hours, active]);
   const end = Date.now(),
     start = end - hours * 3600000;
   return (

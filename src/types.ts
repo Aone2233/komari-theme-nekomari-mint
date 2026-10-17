@@ -92,6 +92,7 @@ export interface Site {
   description?: string;
   private_site?: boolean;
   logged_in?: boolean;
+  ping_record_preserve_time?: number;
   theme_settings?: Record<string, unknown>;
 }
 export type Carrier = "telecom" | "unicom" | "mobile";

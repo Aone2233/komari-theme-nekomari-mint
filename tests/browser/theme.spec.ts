@@ -42,6 +42,7 @@ export async function fixture(
     nodeTags?: string;
     network?: string;
     networkStale?: boolean;
+    preserveHours?: number;
   } = {},
 ) {
   await page.route("**/api/me", (route) =>
@@ -136,6 +137,7 @@ export async function fixture(
           result = {
             sitename: "Nekomari",
             private_site: mode === "private",
+            ping_record_preserve_time: options.preserveHours,
             theme_settings: options.settings || {},
           };
           break;
@@ -578,6 +580,7 @@ test("SAO-inspired controls: cost privacy, list view, tags and lazy history", as
     .getByRole("button", { name: "节点详情", exact: true })
     .first()
     .click();
+  await page.getByRole("tab", { name: "资源历史", exact: true }).click();
   await expect(page.getByLabel("CPU历史，19 个有效点")).toBeVisible();
   await page.getByLabel("历史时间范围", { exact: true }).selectOption("6");
   await expect(page.getByLabel("CPU历史，19 个有效点")).toBeVisible();
@@ -639,6 +642,7 @@ test("history falls back only for a missing method and ignores a cancelled range
     .getByRole("button", { name: "节点详情", exact: true })
     .first()
     .click();
+  await page.getByRole("tab", { name: "资源历史", exact: true }).click();
   await expect(page.getByLabel("CPU历史，2 个有效点")).toBeVisible();
   await page.getByLabel("历史时间范围", { exact: true }).selectOption("6");
   await expect.poll(() => ranges.includes(6)).toBe(true);
@@ -672,6 +676,7 @@ test("detail shows sourced CPU guidance and interactive latency lines, never car
     "https://www.arm.com/products/silicon-ip-cpu/neoverse/neoverse-n1",
   );
   await expect(dialog.locator(".history, .ping-row")).toHaveCount(0);
+  await page.getByRole("tab", { name: "线路观测", exact: true }).click();
   await expect(
     dialog.getByRole("img", { name: /延迟折线图，3 条线路/ }),
   ).toBeVisible();
@@ -711,8 +716,10 @@ test("detail shows sourced CPU guidance and interactive latency lines, never car
       await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth),
     ).toBe(true);
   }
+  await page.getByRole("tab", { name: "概览", exact: true }).click();
   await dialog.locator(".cpu-insight").scrollIntoViewIfNeeded();
   await page.screenshot({ path: "test-results/cpu-guide-mobile.png" });
+  await page.getByRole("tab", { name: "线路观测", exact: true }).click();
   await dialog.locator(".latency-plot").scrollIntoViewIfNeeded();
   await page.screenshot({ path: "test-results/latency-mobile.png" });
   await page.setViewportSize({ width: 1440, height: 1100 });
@@ -755,11 +762,18 @@ test("unknown CPU stays unclassified, latency failures stay distinct across prot
     "能力区间暂未归类",
   );
   await expect(dialog.getByLabel("处理器能力说明").locator("a")).toHaveCount(0);
+  await page.getByRole("tab", { name: "线路观测", exact: true }).click();
   await expect(
     dialog.getByRole("img", { name: /延迟折线图，3 条线路/ }),
   ).toBeVisible();
   await expect(dialog.locator(".latency-legend")).toContainText("ICMP · IPV4");
   await expect(dialog.locator(".latency-legend")).toContainText("TCP · IPV6");
+  await expect(dialog.locator(".latency-legend")).toContainText(
+    "丢包率 100.0%",
+  );
+  await expect(dialog.locator(".latency-legend")).toContainText(
+    "连接失败率 0.0%",
+  );
   const scrubber = dialog.getByLabel("线路采样时刻");
   await scrubber.focus();
   await page.keyboard.press("End");
@@ -806,10 +820,13 @@ test("detail latency handles all-loss, empty and stale histories without implyin
     .first()
     .click();
   const dialog = page.locator("dialog");
+  await page.getByRole("tab", { name: "线路观测", exact: true }).click();
   await expect(
     dialog.getByRole("img", { name: /延迟折线图，1 条线路/ }),
   ).toBeVisible();
-  await expect(dialog.locator(".latency-legend")).toContainText("丢包 100.0%");
+  await expect(dialog.locator(".latency-legend")).toContainText(
+    "连接失败率 100.0%",
+  );
   await expect(dialog.locator(".latency-line")).toHaveCount(0);
   await expect(dialog.locator(".latency-failures")).toHaveAttribute("d", /M/);
   mode = "empty";
@@ -1070,9 +1087,12 @@ test("latency ranges fetch older samples, ignore late responses and retain only 
     .getByRole("button", { name: "节点详情", exact: true })
     .first()
     .click();
-  const section = page.getByLabel("线路观测"),
+  await page.getByRole("tab", { name: "线路观测", exact: true }).click();
+  const section = page.getByRole("region", { name: "线路观测", exact: true }),
     select = page.getByLabel("线路历史时间范围");
-  await expect(select).toHaveValue("1");
+  await expect(
+    select.getByRole("button", { name: "近 1 小时", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
   await expect(
     section.getByRole("button", { name: "刷新", exact: true }),
   ).toBeEnabled();
@@ -1080,10 +1100,10 @@ test("latency ranges fetch older samples, ignore late responses and retain only 
   await expect(section.locator(".latency-stats")).toContainText(
     "样本 1 · 失败 0",
   );
-  await select.selectOption("6");
+  await select.getByRole("button", { name: "近 6 小时", exact: true }).click();
   await expect.poll(() => ranges.includes("6")).toBe(true);
   await expect(section.locator(".latency-plot")).toHaveCount(0);
-  await select.selectOption("24");
+  await select.getByRole("button", { name: "近 24 小时", exact: true }).click();
   await expect(section.locator(".latency-stats")).toContainText("近 24 小时");
   await section.locator(".latency-stats summary").click();
   await expect(section.locator(".latency-stats")).toContainText(
@@ -1091,7 +1111,9 @@ test("latency ranges fetch older samples, ignore late responses and retain only 
   );
   releaseSix();
   await page.waitForTimeout(150);
-  await expect(select).toHaveValue("24");
+  await expect(
+    select.getByRole("button", { name: "近 24 小时", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
   await expect(section.locator(".latency-stats")).toContainText(
     "样本 3 · 失败 1",
   );
@@ -1102,7 +1124,7 @@ test("latency ranges fetch older samples, ignore late responses and retain only 
   await expect(section.locator(".latency-stats")).toContainText(
     "样本 3 · 失败 1",
   );
-  await select.selectOption("6");
+  await select.getByRole("button", { name: "近 6 小时", exact: true }).click();
   await expect(section.getByRole("alert")).toContainText("近 6 小时更新失败");
   await expect(section.locator(".latency-plot")).toHaveCount(0);
   fail = false;
@@ -1131,8 +1153,9 @@ test("wide node detail wraps long metadata and evidence without horizontal scrol
     .first()
     .click();
   const dialog = page.locator(".node-detail");
+  await page.getByRole("tab", { name: "线路观测", exact: true }).click();
   await expect(dialog.locator(".latency-plot")).toBeVisible();
-  await page.getByLabel("线路历史时间范围").selectOption("24");
+  await page.getByRole("button", { name: "近 24 小时", exact: true }).click();
   await expect(dialog.locator(".latency-plot")).toBeVisible();
   await dialog.evaluate((el, text) => {
     el.querySelector("h2")!.textContent = text;
@@ -1149,6 +1172,15 @@ test("wide node detail wraps long metadata and evidence without horizontal scrol
     expect(
       await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth),
     ).toBe(true);
+    for (const label of ["概览", "资源历史", "线路观测", "检测依据"]) {
+      await page.getByRole("tab", { name: label, exact: true }).click();
+      expect(
+        await dialog
+          .locator(".node-detail-body")
+          .evaluate((el) => el.scrollWidth <= el.clientWidth),
+      ).toBe(true);
+    }
+    await page.getByRole("tab", { name: "线路观测", exact: true }).click();
     expect(
       await dialog.evaluate((el) => {
         const rect = el.getBoundingClientRect();
@@ -1156,10 +1188,12 @@ test("wide node detail wraps long metadata and evidence without horizontal scrol
           el.querySelectorAll(
             "h2, .hardware b, .evidence p, .latency-legend button, select, .latency-plot",
           ),
-        ).every((child) => {
-          const r = child.getBoundingClientRect();
-          return r.left >= rect.left && r.right <= rect.right;
-        });
+        )
+          .filter((child) => child.getClientRects().length)
+          .every((child) => {
+            const r = child.getBoundingClientRect();
+            return r.left >= rect.left && r.right <= rect.right;
+          });
       }),
     ).toBe(true);
     if (width === 1440)
@@ -1168,4 +1202,302 @@ test("wide node detail wraps long metadata and evidence without horizontal scrol
       ).toBeGreaterThan(950);
   }
   await page.screenshot({ path: "test-results/detail-long-mobile.png" });
+});
+
+test("detail tabs lazy-load, support keyboard navigation and retain latency controls", async ({
+  page,
+}) => {
+  await fixture(page);
+  const requests: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().endsWith("/api/rpc2")) requests.push(r.postDataJSON().method);
+  });
+  await page.goto("/");
+  await expect(
+    page.locator(".node-card").first().locator(".ping-row"),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "节点详情", exact: true })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("tab", { name: "概览", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".resource-history, .latency-history")).toHaveCount(
+    0,
+  );
+  expect(requests.includes("public:queryMetrics")).toBe(false);
+  const overview = page.getByRole("tab", { name: "概览", exact: true });
+  await overview.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(
+    page.getByRole("tab", { name: "资源历史", exact: true }),
+  ).toBeFocused();
+  await expect(page.getByRole("img", { name: /CPU历史/ })).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await expect(
+    page.getByRole("tab", { name: "线路观测", exact: true }),
+  ).toBeFocused();
+  await expect(page.locator(".latency-plot")).toBeVisible();
+  await page.getByRole("button", { name: "近 12 小时", exact: true }).click();
+  await expect(page.locator(".latency-plot")).toBeVisible();
+  await page.getByRole("button", { name: "全不选", exact: true }).click();
+  await expect(page.locator(".latency-selection")).toContainText("显示 0 / 3");
+  await expect(page.locator(".latency-plot")).toHaveCount(0);
+  await page.getByRole("tab", { name: "检测依据", exact: true }).click();
+  await expect(
+    page.getByRole("tabpanel", { name: "检测依据", exact: true }),
+  ).toContainText("每 24 小时检测");
+  await page.getByRole("tab", { name: "线路观测", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "近 12 小时", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".latency-selection")).toContainText("显示 0 / 3");
+  await page.getByRole("button", { name: "全选", exact: true }).click();
+  await expect(page.locator(".latency-plot")).toBeVisible();
+  await page.getByRole("tab", { name: "线路观测", exact: true }).focus();
+  await page.keyboard.press("End");
+  await expect(
+    page.getByRole("tab", { name: "检测依据", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(overview).toBeFocused();
+});
+
+test("custom latency ranges validate, query from now, crop exactly and display actual statistics", async ({
+  page,
+}) => {
+  await fixture(page);
+  const now = Math.floor(Date.now() / 60000) * 60000;
+  const start = now - 30 * 3600000,
+    end = now - 24 * 3600000;
+  const requests: string[] = [];
+  await page.route("**/api/rpc2", async (route) => {
+    const req = route.request().postDataJSON();
+    if (req.method !== "public:getPingRecords") return route.fallback();
+    requests.push(req.params.hours);
+    await route.fulfill({
+      json: {
+        id: req.id,
+        jsonrpc: "2.0",
+        result: {
+          records: [
+            [start - 1000, 9999],
+            [start, 0],
+            [start + 60000, -1],
+            [end, 100],
+            [end + 1000, 9999],
+          ].map(([time, value]) => ({
+            task_id: 1,
+            ping_type: "tcp",
+            time: new Date(time).toISOString(),
+            value,
+          })),
+        },
+      },
+    });
+  });
+  await page.goto("/");
+  await page
+    .locator(".node-card")
+    .first()
+    .getByRole("button", { name: /查看全部线路/ })
+    .click();
+  await expect(
+    page.getByRole("tab", { name: "线路观测", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("button", { name: "自定义", exact: true }).click();
+  const local = async (time: number) =>
+    page.evaluate((t) => {
+      const d = new Date(t);
+      const p = (n: number) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    }, time);
+  await page.getByLabel("线路图开始时间").fill(await local(end));
+  await page.getByLabel("线路图结束时间").fill(await local(start));
+  const count = requests.length;
+  await page.getByRole("button", { name: "应用区间", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("结束时间须晚于");
+  expect(requests.length).toBe(count);
+  await page.getByLabel("线路图开始时间").fill(await local(start));
+  await page.getByLabel("线路图结束时间").fill(await local(end));
+  await page.getByRole("button", { name: "应用区间", exact: true }).click();
+  await expect(page.locator(".latency-plot")).toBeVisible();
+  expect(requests.at(-1)).toBe("31");
+  await page.locator(".latency-stats summary").click();
+  const stats = page.locator(".latency-stat-row");
+  await expect(stats).toHaveCount(1);
+  await expect(stats).toContainText("样本 3 · 失败 1");
+  await expect(stats).toContainText("0.0 ms / 100.0 ms");
+  await expect(stats).toContainText("50.0 ms / 95.0 ms");
+  await expect(stats).toContainText("连接失败率33.3%");
+  await expect(stats).toContainText("成功 2 / 返回 3");
+  await expect(stats).not.toContainText("9999");
+  await expect(page.locator(".latency-legend")).toContainText("历史样本");
+  await expect(page.locator(".latency-history")).toContainText(
+    "固定自定义区间，手动刷新",
+  );
+  for (const width of [1440, 768, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    const header = page.locator(".node-detail-header");
+    const before = (await header.boundingBox())!.y;
+    await stats.scrollIntoViewIfNeeded();
+    expect((await header.boundingBox())!.y).toBe(before);
+    expect(
+      await page
+        .locator(".node-detail-body")
+        .evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true);
+    expect(
+      await page.locator(".custom-range input").evaluateAll((inputs) =>
+        inputs.every((el) => {
+          const r = el.getBoundingClientRect();
+          return r.left >= 0 && r.right <= innerWidth;
+        }),
+      ),
+    ).toBe(true);
+  }
+});
+
+test("retention disables unavailable presets and rejects old custom ranges", async ({
+  page,
+}) => {
+  await fixture(page, "official", { preserveHours: 6 });
+  await page.goto("/");
+  await page
+    .locator(".node-card")
+    .first()
+    .getByRole("button", { name: /查看全部线路/ })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "近 6 小时", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "近 12 小时", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "近 24 小时", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "自定义", exact: true }).click();
+  await page.getByLabel("线路图开始时间").fill("2020-01-01T00:00");
+  await page.getByRole("button", { name: "应用区间", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("最近 6 小时");
+});
+
+test("insufficient samples remain collecting, retain failures and do not produce ratings", async ({
+  page,
+}) => {
+  await fixture(page);
+  await page.route("**/api/rpc2", async (route) => {
+    const req = route.request().postDataJSON();
+    if (req.method !== "public:getPingRecords") return route.fallback();
+    await route.fulfill({
+      json: {
+        id: req.id,
+        jsonrpc: "2.0",
+        result: {
+          records: Array.from({ length: 29 }, (_, i) => ({
+            task_id: 1,
+            ping_type: "tcp",
+            value: -1,
+            time: new Date(Date.now() - (29 - i) * 1000).toISOString(),
+          })),
+        },
+      },
+    });
+  });
+  await page.goto("/");
+  const card = page.locator(".node-card").first();
+  await expect(card.locator(".health")).toHaveText("采集中");
+  await expect(card.locator(".grade")).toContainText("—");
+  await expect(card.locator(".loss")).toHaveText("100.0%");
+  await expect(card.locator(".path-status")).toContainText("失败 29 / 29");
+  await page.setViewportSize({ width: 320, height: 900 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("hidden latency tabs stop polling and resume the retained range when reopened", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await fixture(page);
+  let twelve = 0;
+  page.on("request", (r) => {
+    if (!r.url().endsWith("/api/rpc2")) return;
+    const req = r.postDataJSON();
+    if (req.method === "public:getPingRecords" && req.params.hours === "12")
+      twelve++;
+  });
+  await page.goto("/");
+  await page
+    .locator(".node-card")
+    .first()
+    .getByRole("button", { name: /查看全部线路/ })
+    .click();
+  await page.getByRole("button", { name: "近 12 小时", exact: true }).click();
+  await expect(page.locator(".latency-plot")).toBeVisible();
+  expect(twelve).toBe(1);
+  await page.getByRole("tab", { name: "概览", exact: true }).click();
+  await page.clock.fastForward(61000);
+  expect(twelve).toBe(1);
+  await page.getByRole("tab", { name: "线路观测", exact: true }).click();
+  await expect.poll(() => twelve).toBe(2);
+  await expect(
+    page.getByRole("button", { name: "近 12 小时", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+});
+
+test("a cancelled custom response cannot replace a newer preset or reappear after failure", async ({
+  page,
+}) => {
+  await fixture(page);
+  let delayed = false;
+  await page.route("**/api/rpc2", async (route) => {
+    const req = route.request().postDataJSON();
+    if (req.method !== "public:getPingRecords") return route.fallback();
+    const h = req.params.hours;
+    if (h === "24" || h === "25") {
+      delayed = true;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    if (h === "6")
+      return route.fulfill({ status: 503, json: { message: "Unavailable" } });
+    await route.fulfill({
+      json: {
+        id: req.id,
+        jsonrpc: "2.0",
+        result: {
+          records: [
+            {
+              task_id: 1,
+              ping_type: "tcp",
+              time: new Date(Date.now() - 1000).toISOString(),
+              value: h === "12" ? 12 : 9999,
+            },
+          ],
+        },
+      },
+    });
+  });
+  await page.goto("/");
+  await page
+    .locator(".node-card")
+    .first()
+    .getByRole("button", { name: /查看全部线路/ })
+    .click();
+  await page.getByRole("button", { name: "自定义", exact: true }).click();
+  await page.getByRole("button", { name: "应用区间", exact: true }).click();
+  await expect.poll(() => delayed).toBe(true);
+  await page.getByRole("button", { name: "近 12 小时", exact: true }).click();
+  await expect(page.locator(".latency-legend")).toContainText("12.0 ms");
+  await page.waitForTimeout(650);
+  await expect(page.locator(".latency-legend")).not.toContainText("9999");
+  await page.getByRole("button", { name: "近 6 小时", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("近 6 小时更新失败");
+  await expect(page.locator(".latency-plot")).toHaveCount(0);
+  await expect(page.locator(".latency-legend")).toHaveCount(0);
 });

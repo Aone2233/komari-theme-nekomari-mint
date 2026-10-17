@@ -1,4 +1,49 @@
-import type { PingRecord } from "./types";
+import type { PingRecord, PingSeries } from "./types";
+
+export const MIN_PING_SAMPLES = 30;
+
+export function failureLabel(protocol?: string) {
+  return protocol === "icmp"
+    ? "丢包率"
+    : protocol === "tcp"
+      ? "连接失败率"
+      : protocol === "http"
+        ? "请求失败率"
+        : "探测失败率";
+}
+
+export function qualifiedPingSeries(series: PingSeries[], now = Date.now()) {
+  return series.filter((row) => {
+    const age = now - Date.parse(row.records.at(-1)?.time || "");
+    return row.total >= MIN_PING_SAMPLES && age >= -30000 && age <= 300000;
+  });
+}
+
+export function pingSummary(records: PingRecord[]) {
+  const values = records
+    .filter((r) => Number.isFinite(r.value) && r.value >= 0)
+    .map((r) => r.value)
+    .sort((a, b) => a - b);
+  const percentile = (fraction: number) => {
+    if (!values.length) return null;
+    const position = (values.length - 1) * fraction,
+      low = Math.floor(position),
+      high = Math.ceil(position);
+    return values[low] + (values[high] - values[low]) * (position - low);
+  };
+  const times = records.map((r) => Date.parse(r.time)).filter(Number.isFinite);
+  return {
+    min: values[0] ?? null,
+    max: values.at(-1) ?? null,
+    average: values.length
+      ? values.reduce((sum, value) => sum + value / values.length, 0)
+      : null,
+    p95: percentile(0.95),
+    success: values.length,
+    first: times.length ? times.reduce((a, b) => Math.min(a, b)) : null,
+    last: times.length ? times.reduce((a, b) => Math.max(a, b)) : null,
+  };
+}
 
 export function pingGapMs(
   interval?: number,

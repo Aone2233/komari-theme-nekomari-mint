@@ -72,6 +72,14 @@ import CpuInsight from "./CpuInsight";
 import NetworkEvidence from "./NetworkEvidence";
 import { networkEvidence } from "./network";
 import { primaryPing } from "./primaryPing";
+import { failureLabel, MIN_PING_SAMPLES, qualifiedPingSeries } from "./latency";
+type DetailSection = "overview" | "resources" | "latency" | "evidence";
+const detailSections = [
+  ["overview", "概览"],
+  ["resources", "资源历史"],
+  ["latency", "线路观测"],
+  ["evidence", "检测依据"],
+] as const;
 const History = lazy(() => import("./History"));
 const LatencyHistory = lazy(() => import("./LatencyHistory"));
 const CostPanel = lazy(() => import("./CostPanel"));
@@ -167,7 +175,7 @@ function PingLine({ series, name }: { series?: PingSeries; name: string }) {
           />
         ))}
       </div>
-      <span className="loss">
+      <span className="loss" title={failureLabel(series?.protocol)}>
         {series?.loss == null ? "—" : `${series.loss.toFixed(1)}%`}
       </span>
     </div>
@@ -192,6 +200,7 @@ function NodeCard({
     node: NodeInfo,
     records: PingRecord[],
     ext: Extension | null,
+    section?: DetailSection,
   ) => void;
 }) {
   const [records, setRecords] = useState<PingRecord[]>([]);
@@ -281,16 +290,24 @@ function NodeCard({
       s.records.at(-1) &&
       Date.now() - Date.parse(s.records.at(-1)!.time) < 300_000,
   );
-  const score = scores(historyError || !recentPing ? [] : series);
+  const qualified = qualifiedPingSeries(series);
+  const qualifiedTotal = qualified.reduce((sum, row) => sum + row.total, 0);
+  const qualifiedFailures = qualified.reduce(
+    (sum, row) => sum + row.failures,
+    0,
+  );
+  const score = scores(historyError ? [] : qualified);
   const statusLabel = !isOnline
     ? "离线"
     : historyError
       ? "数据异常"
       : !recentPing
         ? "待检测"
-        : failures / total > 0.05
-          ? "需留意"
-          : "良好";
+        : !qualified.length
+          ? "采集中"
+          : qualifiedFailures / qualifiedTotal > 0.05
+            ? "需留意"
+            : "良好";
   const cpu = isOnline ? measured(live, "cpu", "cpu") : null;
   const ram = isOnline
     ? percent(measured(live, "ram", "ram"), live?.ram_total ?? node.mem_total)
@@ -320,7 +337,7 @@ function NodeCard({
           <button
             className="grade"
             onClick={() => onOpen(node, records, extension)}
-            title="Mint 观测分：稳定性 70% + 延迟 30%；不是 IP 信誉评分"
+            title={`Mint 观测分：稳定性 70% + 延迟 30%；${qualified.length}/${series.length} 条线路达到至少 30 个返回样本且最新样本在五分钟内；不是 IP 信誉评分`}
           >
             <span>
               {score.overall === null
@@ -371,10 +388,10 @@ function NodeCard({
         </div>
       )}
       <div className="score-row">
-        <span title="延迟分 = max(0, 100 − 各线路中位延迟 / 5)">
+        <span title="仅对达标且新鲜的线路计算：延迟分 = max(0, 100 − 各线路中位延迟 / 5)">
           线路 <b>{score.latency ?? "—"}</b>
         </span>
-        <span title="稳定分 = 成功样本数 / 全部样本数 × 100">
+        <span title="仅对达标且新鲜的线路计算：稳定分 = 成功样本数 / 全部样本数 × 100">
           稳定 <b className="green">{score.stability ?? "—"}</b>
         </span>
         <span title="仅实际探测，不将地区政策判断算作实测可用">
@@ -396,7 +413,7 @@ function NodeCard({
       </div>
       <div className={`path-status ${historyError ? "warning" : ""}`}>
         <i
-          className={`status-dot ${recentPing && !historyError && failures === 0 ? "up" : "pending"}`}
+          className={`status-dot ${qualified.length > 0 && !historyError && qualifiedFailures === 0 ? "up" : "pending"}`}
         />
         <strong>
           {historyError
@@ -405,9 +422,11 @@ function NodeCard({
               ? "等待线路检测"
               : !recentPing
                 ? "线路样本已过期"
-                : failures
-                  ? "线路存在波动"
-                  : "监测线路稳定"}
+                : !qualified.length
+                  ? `采集中 · 至少 ${MIN_PING_SAMPLES} 个样本后评级`
+                  : qualifiedFailures
+                    ? "达标线路存在波动"
+                    : "达标线路样本稳定"}
         </strong>
         <span>
           近 1 小时 {total ? `失败 ${failures} / ${total}` : "暂无样本"}
@@ -416,7 +435,10 @@ function NodeCard({
       <div className="ping-table primary-ping">
         <div className="ping-caption">
           <span>主线路延迟</span>
-          <span>近 1 小时 · 丢包</span>
+          <span>
+            近 1 小时 ·{" "}
+            {failureLabel(primary.series?.protocol || primary.task?.type)}
+          </span>
         </div>
         <PingLine
           name={
@@ -427,7 +449,7 @@ function NodeCard({
         />
         <button
           className="all-lines-button"
-          onClick={() => onOpen(node, records, extension)}
+          onClick={() => onOpen(node, records, extension, "latency")}
         >
           查看全部线路{series.length ? `（${series.length}）` : ""}{" "}
           <ArrowUpRight size={12} />
@@ -599,6 +621,8 @@ function Detail({
   tasks,
   settings,
   extension,
+  initialSection = "overview",
+  preserveHours,
   onClose,
 }: {
   node: NodeInfo;
@@ -607,9 +631,21 @@ function Detail({
   tasks: PingTask[];
   settings?: Site["theme_settings"];
   extension: Extension | null;
+  initialSection?: DetailSection;
+  preserveHours?: number;
   onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const [section, setSection] = useState<DetailSection>(initialSection);
+  const [visited, setVisited] = useState<Set<DetailSection>>(
+    () => new Set([initialSection]),
+  );
+  function selectSection(next: DetailSection) {
+    setSection(next);
+    setVisited((current) => new Set([...current, next]));
+    body.current?.scrollTo({ top: 0 });
+  }
   useEffect(() => {
     dialog.current?.showModal();
     const prev = document.body.style.overflow;
@@ -622,143 +658,227 @@ function Detail({
     <dialog
       ref={dialog}
       className="detail node-detail"
+      aria-labelledby="node-detail-title"
       onCancel={onClose}
       onClick={(e) => {
         if (e.target === dialog.current) onClose();
       }}
     >
-      <div className="dialog-head">
-        <div>
-          <span className="eyebrow">NODE INSIGHTS</span>
-          <h2>{node.name}</h2>
+      <header className="node-detail-header">
+        <div className="dialog-head">
+          <div>
+            <span className="eyebrow">NODE INSIGHTS</span>
+            <h2 id="node-detail-title" title={node.name}>
+              {node.name}
+            </h2>
+          </div>
+          <button
+            className="icon-button"
+            onClick={onClose}
+            aria-label="关闭详情"
+          >
+            <X />
+          </button>
         </div>
-        <button className="icon-button" onClick={onClose} aria-label="关闭详情">
-          <X />
-        </button>
-      </div>
-      <div className="detail-state">
-        <span className={`status-dot ${online(live) ? "up" : ""}`} />
-        {online(live) ? "节点在线" : "节点离线"}
-        <span>
-          {regionName(node.region)} · {node.os || "系统未知"}
-        </span>
-      </div>
-      <div className="hardware">
-        <div>
-          <span>处理器</span>
-          <b>{node.cpu_name || "尚未上报"}</b>
-          <small>
-            {node.cpu_cores || "—"} 逻辑 CPU · {node.arch || "—"}
-          </small>
+        <div className="detail-state">
+          <span className={`status-dot ${online(live) ? "up" : ""}`} />
+          {online(live) ? "节点在线" : "节点离线"}
+          <span title={`${regionName(node.region)} · ${node.os || "系统未知"}`}>
+            {regionName(node.region)} · {node.os || "系统未知"}
+          </span>
         </div>
-        <div>
-          <span>内存 / 磁盘</span>
-          <b>
-            {bytes(node.mem_total)} / {bytes(node.disk_total)}
-          </b>
-          <small>
-            最后上报{" "}
-            {live?.time ? new Date(live.time).toLocaleString("zh-CN") : "—"}
-          </small>
+        <div className="detail-tabs" role="tablist" aria-label="节点详情分区">
+          {detailSections.map(([id, label], index) => (
+            <button
+              key={id}
+              id={`detail-tab-${id}`}
+              type="button"
+              role="tab"
+              aria-selected={section === id}
+              aria-controls={`detail-panel-${id}`}
+              tabIndex={section === id ? 0 : -1}
+              onClick={() => selectSection(id)}
+              onKeyDown={(event) => {
+                const next =
+                  event.key === "ArrowRight"
+                    ? (index + 1) % 4
+                    : event.key === "ArrowLeft"
+                      ? (index + 3) % 4
+                      : event.key === "Home"
+                        ? 0
+                        : event.key === "End"
+                          ? 3
+                          : null;
+                if (next === null) return;
+                event.preventDefault();
+                selectSection(detailSections[next][0]);
+                document
+                  .getElementById(`detail-tab-${detailSections[next][0]}`)
+                  ?.focus();
+              }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-      </div>
-      <CpuInsight name={node.cpu_name} />
-      <NetworkEvidence node={node} ip={extension?.ip} />
-      {node.public_remark && (
-        <p className="public-remark">{node.public_remark}</p>
-      )}
-      <div className="node-runtime">
-        <span>运行时间 {duration(live?.uptime)}</span>
-        <span>连接数 {healthyConnections(live) ?? "—"}</span>
-        <span>负载 {live?.load ?? "—"}</span>
-      </div>
-      <Suspense fallback={<p>正在载入历史图表…</p>}>
-        <History uuid={node.uuid} />
-      </Suspense>
-      <Suspense fallback={<p>正在载入线路图表…</p>}>
-        <LatencyHistory
-          uuid={node.uuid}
-          initialRecords={records}
-          tasks={tasks}
-          settings={settings}
-        />
-      </Suspense>
-      <h3>回程证据</h3>
-      <p className="empty-note">
-        {extension?.routes
-          ? `探测于 ${new Date(extension.routes.probed_at).toLocaleString("zh-CN")} · 每 24 小时检测 · ${extension.routes.stale ? "已过期" : "ASN 观察，不保证全程或 CN2 GIA"}`
-          : extension
-            ? "Agent 未配置回程目标或未上报；延迟任务不等于回程探测。"
-            : "服务端未提供 Mint 摘要接口，请升级 Nekomari。"}
-      </p>
-      {extension?.routes?.results.map((route, i) => (
-        <p className="route-evidence" key={i}>
-          {carriers[route.carrier as keyof typeof carriers] || route.carrier} ·{" "}
-          {route.target} · {route.label || "未识别 ASN"} ·{" "}
-          {route.reached ? "已到达" : "未到达"} · {route.hops} 跳
-          {route.error ? ` · ${route.error}` : ""}
-        </p>
-      ))}
-      <h3>检测依据</h3>
-      <p className="empty-note">
-        {extension?.unlock
-          ? `探测于 ${new Date(extension.unlock.probed_at).toLocaleString("zh-CN")} · ${extension.unlock.stale ? "已过期" : "快照有效"}`
-          : "尚无可读取的检测快照"}
-      </p>
-      <div className="evidence">
-        {services.map(([id, name]) => {
-          const item = extension?.unlock?.results.find(
-            (r) => r.id === id || (id === "youtube" && r.id.startsWith(id)),
-          );
-          const state =
-            id === "gemini" && !item
-              ? { label: "未接入", tone: "muted" }
-              : unlockState(item, extension?.unlock?.stale);
-          return (
-            <div key={id}>
-              <b>{name}</b>
-              <span className={`evidence-label ${state.tone}`}>
-                {state.label}
-              </span>
+      </header>
+      <div className="node-detail-body" ref={body}>
+        <section
+          className="detail-panel"
+          role="tabpanel"
+          id="detail-panel-overview"
+          aria-labelledby="detail-tab-overview"
+          hidden={section !== "overview"}
+        >
+          <div className="hardware">
+            <div>
+              <span>处理器</span>
+              <b>{node.cpu_name || "尚未上报"}</b>
+              <small>
+                {node.cpu_cores || "—"} 逻辑 CPU · {node.arch || "—"}
+              </small>
+            </div>
+            <div>
+              <span>内存 / 磁盘</span>
+              <b>
+                {bytes(node.mem_total)} / {bytes(node.disk_total)}
+              </b>
+              <small>
+                最后上报{" "}
+                {live?.time ? new Date(live.time).toLocaleString("zh-CN") : "—"}
+              </small>
+            </div>
+          </div>
+          <CpuInsight name={node.cpu_name} />
+          <NetworkEvidence node={node} ip={extension?.ip} />
+          {node.public_remark && (
+            <p className="public-remark">{node.public_remark}</p>
+          )}
+          <div className="node-runtime">
+            <span>运行时间 {duration(live?.uptime)}</span>
+            <span>连接数 {healthyConnections(live) ?? "—"}</span>
+            <span>负载 {live?.load ?? "—"}</span>
+          </div>
+          <div className="explanation">
+            <ShieldCheck size={19} />
+            <div>
+              <b>分数来自观测，不是保证</b>
               <p>
-                {item?.detail ||
-                  (id === "gemini"
-                    ? "Agent 尚未实现此服务的探测。"
-                    : "尚未收到此服务的检测结果。")}
+                稳定分 = 成功样本比例 × 100；线路分 = max(0, 100 − 中位延迟 /
+                5)；总分 = 稳定分 × 70% + 线路分 × 30%。每条线路至少 30
+                个返回样本且最新样本在五分钟内才参与评级；未达标线路不计分，但仍显示其失败记录。仅统计实际收到的主目标记录，聚合点不代表原始探测次数，断档不当作成功；“地区判断”不代表该
+                IP 已解锁。IP 信誉未接入，因此不评分。
               </p>
             </div>
-          );
-        })}
-      </div>
-      <div className="explanation">
-        <ShieldCheck size={19} />
-        <div>
-          <b>分数来自观测，不是保证</b>
-          <p>
-            稳定分 = 成功样本比例 × 100；线路分 = max(0, 100 − 中位延迟 /
-            5)；总分 = 稳定分 × 70% + 线路分 ×
-            30%。仅统计实际收到的主目标样本，断档不当作成功；“地区判断”不代表该
-            IP 已解锁。IP 信誉未接入，因此不评分。
+          </div>
+        </section>
+        <section
+          className="detail-panel"
+          role="tabpanel"
+          id="detail-panel-resources"
+          aria-labelledby="detail-tab-resources"
+          hidden={section !== "resources"}
+        >
+          {visited.has("resources") && (
+            <Suspense fallback={<p>正在载入历史图表…</p>}>
+              <History uuid={node.uuid} active={section === "resources"} />
+            </Suspense>
+          )}
+        </section>
+        <section
+          className="detail-panel"
+          role="tabpanel"
+          id="detail-panel-latency"
+          aria-labelledby="detail-tab-latency"
+          hidden={section !== "latency"}
+        >
+          {visited.has("latency") && (
+            <Suspense fallback={<p>正在载入线路图表…</p>}>
+              <LatencyHistory
+                uuid={node.uuid}
+                active={section === "latency"}
+                preserveHours={preserveHours}
+                initialRecords={records}
+                tasks={tasks}
+                settings={settings}
+              />
+            </Suspense>
+          )}
+        </section>
+        <section
+          className="detail-panel"
+          role="tabpanel"
+          id="detail-panel-evidence"
+          aria-labelledby="detail-tab-evidence"
+          hidden={section !== "evidence"}
+        >
+          <h3>回程证据</h3>
+          <p className="empty-note">
+            {extension?.routes
+              ? `探测于 ${new Date(extension.routes.probed_at).toLocaleString("zh-CN")} · 每 24 小时检测 · ${extension.routes.stale ? "已过期" : "ASN 观察，不保证全程或 CN2 GIA"}`
+              : extension
+                ? "Agent 未配置回程目标或未上报；延迟任务不等于回程探测。"
+                : "服务端未提供 Mint 摘要接口，请升级 Nekomari。"}
           </p>
-        </div>
-      </div>
-      <div className="history-key">
-        <span>
-          <i className="ok" />
-          正常 ≤ 250 ms
-        </span>
-        <span>
-          <i className="slow" />
-          高延迟
-        </span>
-        <span>
-          <i className="lost" />
-          存在失败
-        </span>
-        <span>
-          <i className="unknown" />
-          无样本
-        </span>
+          {extension?.routes?.results.map((route, i) => (
+            <p className="route-evidence" key={i}>
+              {carriers[route.carrier as keyof typeof carriers] ||
+                route.carrier}{" "}
+              · {route.target} · {route.label || "未识别 ASN"} ·{" "}
+              {route.reached ? "已到达" : "未到达"} · {route.hops} 跳
+              {route.error ? ` · ${route.error}` : ""}
+            </p>
+          ))}
+          <h3>检测依据</h3>
+          <p className="empty-note">
+            {extension?.unlock
+              ? `探测于 ${new Date(extension.unlock.probed_at).toLocaleString("zh-CN")} · ${extension.unlock.stale ? "已过期" : "快照有效"}`
+              : "尚无可读取的检测快照"}
+          </p>
+          <div className="evidence">
+            {services.map(([id, name]) => {
+              const item = extension?.unlock?.results.find(
+                (r) => r.id === id || (id === "youtube" && r.id.startsWith(id)),
+              );
+              const state =
+                id === "gemini" && !item
+                  ? { label: "未接入", tone: "muted" }
+                  : unlockState(item, extension?.unlock?.stale);
+              return (
+                <div key={id}>
+                  <b>{name}</b>
+                  <span className={`evidence-label ${state.tone}`}>
+                    {state.label}
+                  </span>
+                  <p>
+                    {item?.detail ||
+                      (id === "gemini"
+                        ? "Agent 尚未实现此服务的探测。"
+                        : "尚未收到此服务的检测结果。")}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          <div className="history-key">
+            <span>
+              <i className="ok" />
+              正常 ≤ 250 ms
+            </span>
+            <span>
+              <i className="slow" />
+              高延迟
+            </span>
+            <span>
+              <i className="lost" />
+              存在失败
+            </span>
+            <span>
+              <i className="unknown" />
+              无样本
+            </span>
+          </div>
+        </section>
       </div>
     </dialog>
   );
@@ -848,6 +968,7 @@ export function App() {
       node: NodeInfo;
       records: PingRecord[];
       ext: Extension | null;
+      section?: DetailSection;
     } | null>(null);
   const [view, setView] = useState(
     () => localStorage.getItem("mint-view") || "cards",
@@ -1285,8 +1406,8 @@ export function App() {
                       settings={site.theme_settings}
                       index={i}
                       hideCosts={hideCosts}
-                      onOpen={(node, records, ext) =>
-                        setDetail({ node, records, ext })
+                      onOpen={(node, records, ext, section) =>
+                        setDetail({ node, records, ext, section })
                       }
                     />
                   ))}
@@ -1329,7 +1450,7 @@ export function App() {
         <footer>
           <span className="footer-brand">
             <Leaf size={15} />
-            Nekomari Mint <span>v0.6.1</span>
+            Nekomari Mint <span>v0.7.0</span>
           </span>
           <p>
             {String(
@@ -1347,6 +1468,9 @@ export function App() {
       </main>
       {detail && !privateSite && (
         <Detail
+          key={detail.node.uuid}
+          initialSection={detail.section}
+          preserveHours={site.ping_record_preserve_time}
           node={detail.node}
           records={detail.records}
           extension={detail.ext}

@@ -92,14 +92,16 @@ try {
     .first()
     .click();
   await page.waitForSelector("dialog[open]");
+  await page.getByLabel("处理器能力说明").waitFor();
+  await page.getByLabel("网络类型依据").waitFor();
+  await page.getByRole("tab", { name: "资源历史", exact: true }).click();
   await page.getByRole("img", { name: /CPU历史，/ }).waitFor();
   const historyLabel = await page
     .getByRole("img", { name: /CPU历史，/ })
     .getAttribute("aria-label");
   if (!historyLabel || /，0 个/.test(historyLabel))
     throw Error("Real CPU history is empty");
-  await page.getByLabel("处理器能力说明").waitFor();
-  await page.getByLabel("网络类型依据").waitFor();
+  await page.getByRole("tab", { name: "线路观测", exact: true }).click();
   await page.getByRole("img", { name: /延迟折线图，/ }).waitFor();
   if (await page.locator("dialog .history, dialog .ping-row").count())
     throw Error(
@@ -117,7 +119,7 @@ try {
   await page.locator(".latency-plot").scrollIntoViewIfNeeded();
   await page.screenshot({ path: resolve(output, "detail-latency.png") });
   const latencyRanges = [];
-  for (const hours of [6, 24, 1]) {
+  for (const hours of [6, 12, 24, 1]) {
     const response = page.waitForResponse((r) => {
       if (!r.url().endsWith("/api/rpc2") || r.request().method() !== "POST")
         return false;
@@ -127,7 +129,9 @@ try {
         req.params.hours === String(hours)
       );
     });
-    await page.getByLabel("线路历史时间范围").selectOption(String(hours));
+    await page
+      .getByRole("button", { name: `近 ${hours} 小时`, exact: true })
+      .click();
     const body = await (await response).json();
     if (body.error || !Array.isArray(body.result?.records))
       throw Error("Range history request failed");
@@ -144,14 +148,63 @@ try {
       );
     latencyRanges.push({ hours, returnedSamples: body.result.records.length });
   }
+  await page.getByRole("button", { name: "自定义", exact: true }).click();
+  const customBounds = await page.evaluate(() => {
+    const end = Math.floor(Date.now() / 60000) * 60000 - 60000;
+    const start = end - 3600000;
+    const local = (t) => {
+      const d = new Date(t),
+        p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    };
+    return { start, end, from: local(start), to: local(end) };
+  });
+  await page.getByLabel("线路图开始时间").fill(customBounds.from);
+  await page.getByLabel("线路图结束时间").fill(customBounds.to);
+  const customResponse = page.waitForResponse((r) => {
+    if (!r.url().endsWith("/api/rpc2") || r.request().method() !== "POST")
+      return false;
+    const req = r.request().postDataJSON();
+    return req.method === "public:getPingRecords" && req.params.hours === "2";
+  });
+  await page.getByRole("button", { name: "应用区间", exact: true }).click();
+  const customBody = await (await customResponse).json();
+  if (customBody.error || !Array.isArray(customBody.result?.records))
+    throw Error("Custom history request failed");
+  await page.locator(".latency-plot").waitFor();
+  await page.locator(".latency-stats summary").click();
+  const customTotal = (
+    await page.locator(".latency-stat-row").allTextContents()
+  ).reduce((sum, text) => sum + Number(text.match(/样本 (\d+)/)?.[1] || 0), 0);
+  const expectedTotal = customBody.result.records.filter(
+    (r) =>
+      r.role !== "reference" &&
+      Date.parse(r.time) >= customBounds.start &&
+      Date.parse(r.time) <= customBounds.end &&
+      Number.isFinite(r.value),
+  ).length;
+  if (!customTotal || customTotal !== expectedTotal)
+    throw Error(
+      `Custom interval crop mismatch: ${customTotal}/${expectedTotal}`,
+    );
+  await page.getByRole("button", { name: "全不选", exact: true }).click();
+  if (await page.locator(".latency-plot").count())
+    throw Error("Deselect all failed");
+  await page.getByRole("button", { name: "全选", exact: true }).click();
+  await page.locator(".latency-plot").waitFor();
   for (const width of [1440, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 1100 });
     if (
       await page
-        .locator(".node-detail")
+        .locator(".node-detail-body")
         .evaluate((el) => el.scrollWidth > el.clientWidth)
     )
       throw Error(`Node detail horizontal overflow at ${width}px`);
+    const header = page.locator(".node-detail-header");
+    const y = (await header.boundingBox()).y;
+    await page.locator(".latency-stats").scrollIntoViewIfNeeded();
+    if ((await header.boundingBox()).y !== y)
+      throw Error("Detail header scrolled out of view");
   }
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page.keyboard.press("Escape");
@@ -187,6 +240,10 @@ try {
     realResourceHistory: true,
     realLatencyLines: true,
     latencyRanges,
+    customRangeExactCrop: true,
+    allNoneSelection: true,
+    detailTabs: true,
+    fixedDetailHeader: true,
     detailHorizontalOverflow: false,
     onePrimaryLinePerCard: true,
     cpuGuidance: true,

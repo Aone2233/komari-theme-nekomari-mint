@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0 - 2026-10-17
+
+- Organize node details into accessible Overview / Resources / Latency / Evidence tabs with a fixed header; open all-lines actions directly in Latency.
+- Lazy-load history tabs, cancel hidden requests and retain selected ranges and series visibility on return.
+- Add 12-hour presets, validated local custom intervals with legacy lookback/exact cropping, retention-aware controls and all/none selection.
+- Show per-series latest/min/max/mean/P95, actual returned time bounds and sample counts without claiming continuous coverage or raw-probe statistics.
+- Distinguish ICMP packet loss, TCP connection failure and HTTP request failure; require 30 returned records and fresh data per series before current ratings, preserving unqualified failure evidence.
+- Reference Transit interactions without adopting interpolation, peak trimming or topology; retain Mint visuals, SAO costs/bindings and daily route schedules.
+
 ## 0.6.1 - 2026-10-17
 
 - Add independent 1/6/24-hour latency history selection, querying and filtering the actual selected time window while keeping homepage cards at one hour.
